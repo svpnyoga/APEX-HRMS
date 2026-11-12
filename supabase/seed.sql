@@ -1,0 +1,9 @@
+-- Intentionally empty.
+--
+-- A fresh installation has no accounts and no built-in passwords.
+-- Open the app, choose "Create an account" and register your company: the first
+-- person to sign up becomes the company's super administrator. Everyone else
+-- signs up with the company code shown in Administration › User management ›
+-- Sign-up settings, and waits for an administrator to approve them.
+--
+-- (The demo data used by the automated tests lives in tests/db/fixtures/demo_seed.sql.)

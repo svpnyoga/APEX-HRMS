@@ -1,0 +1,63 @@
+# Minimal Supabase CLI config for local development (supabase start / db reset).
+project_id = "apex-hrms"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 10000
+
+[db]
+port = 54322
+major_version = 15
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
+[auth]
+enabled = true
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["http://localhost:5173", "http://localhost:5173/reset-password"]
+# Anyone may create a login, but a login alone gives access to nothing: the
+# person must confirm their email and then be approved by an administrator
+# (or be the very first sign-up, who creates the company).
+enable_signup = true
+minimum_password_length = 10
+password_requirements = "lower_upper_letters_digits"
+
+[auth.rate_limit]
+email_sent = 30
+sign_in_sign_ups = 30
+
+[auth.email]
+enable_signup = true
+enable_confirmations = true
+double_confirm_changes = true
+
+# Recommended in production: bot protection on sign-up / sign-in.
+# [auth.captcha]
+# enabled = true
+# provider = "turnstile"   # or "hcaptcha"
+# secret = "env(SUPABASE_AUTH_CAPTCHA_SECRET)"
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
+[storage]
+enabled = true
+file_size_limit = "10MiB"
+
+[realtime]
+enabled = true
+
+[functions.biometric-push]
+verify_jwt = false
+
+[functions.process-email-outbox]
+verify_jwt = false
+
+[functions.scheduled-jobs]
+verify_jwt = false

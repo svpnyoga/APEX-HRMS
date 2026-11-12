@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --canvas: 245 246 250;  --surface: 255 255 255;  --raised: 249 250 252;  --line: 227 230 238;
+  --ink: 15 27 61;        --ink-soft: 25 39 79;     --ink-line: 39 54 98;    --ink-text: 230 234 247; --ink-muted: 146 158 196;
+  --text: 20 27 45;       --muted: 91 100 120;      --subtle: 140 148 166;
+  --primary: 63 60 187;   --primary-soft: 236 236 252; --primary-fg: 255 255 255;
+  --success: 21 128 61;   --success-soft: 230 245 236;
+  --warning: 180 83 9;    --warning-soft: 253 243 225;
+  --danger: 185 28 28;    --danger-soft: 252 233 233;
+  --info: 3 105 161;      --info-soft: 226 241 250;
+  --scan: 8 145 178;
+  color-scheme: light;
+}
+:root[data-theme='dark'] {
+  --canvas: 14 21 38;     --surface: 21 30 51;      --raised: 26 37 62;      --line: 36 48 74;
+  --ink: 10 16 31;        --ink-soft: 21 30 51;     --ink-line: 36 48 74;    --ink-text: 230 234 247; --ink-muted: 146 158 196;
+  --text: 230 233 242;    --muted: 152 162 184;     --subtle: 112 122 146;
+  --primary: 129 128 247; --primary-soft: 38 40 84; --primary-fg: 12 14 40;
+  --success: 74 222 128;  --success-soft: 20 52 37;
+  --warning: 251 191 36;  --warning-soft: 58 42 14;
+  --danger: 248 113 113;  --danger-soft: 66 24 28;
+  --info: 56 189 248;     --info-soft: 15 44 66;
+  --scan: 34 211 238;
+  color-scheme: dark;
+}
+
+html, body, #root { height: 100%; }
+body { @apply bg-canvas text-text font-sans antialiased; font-feature-settings: 'tnum' 0; }
+.figure { @apply font-figure tracking-tight; font-variant-numeric: tabular-nums; }
+.tnum { font-variant-numeric: tabular-nums; }
+:focus-visible { outline: 2px solid rgb(var(--primary)); outline-offset: 2px; border-radius: 6px; }
+::selection { background: rgb(var(--primary) / 0.18); }
+.scrollbar-thin::-webkit-scrollbar { width: 8px; height: 8px; }
+.scrollbar-thin::-webkit-scrollbar-thumb { background: rgb(var(--line)); border-radius: 8px; }
+.skeleton { @apply relative overflow-hidden rounded-md bg-line/60; }
+.skeleton::after { content: ''; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgb(var(--surface) / .6), transparent); animation: shimmer 1.4s infinite; }
+@keyframes shimmer { 100% { transform: translateX(100%); } }
+.leaflet-container { font-family: inherit; border-radius: 10px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
