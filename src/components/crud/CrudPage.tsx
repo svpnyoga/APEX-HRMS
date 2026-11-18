@@ -18,6 +18,14 @@ import { Switch } from '@/components/ui/misc'
 import { Menu, MenuItem } from '@/components/ui/menu'
 import { cn } from '@/lib/utils'
 
+/** 'Leave policies' -> 'leave policy', 'Shifts' -> 'shift', 'Addresses' -> 'address'. */
+function singular(title: string) {
+  const t = title.toLowerCase()
+  if (/ies$/.test(t)) return t.replace(/ies$/, 'y')
+  if (/(ss|sh|ch|x)es$/.test(t)) return t.replace(/es$/, '')
+  return t.replace(/s$/, '')
+}
+
 export type FieldDef = {
   name: string
   label: string
@@ -187,7 +195,7 @@ export function CrudDialog({ cfg, open, onOpenChange, editing }: { cfg: CrudConf
   }, { success: editing ? 'Changes saved' : 'Created', invalidate: [cfg.queryKey ?? ['crud', cfg.table], ['lookup', cfg.table]], onSuccess: () => onOpenChange(false) })
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} title={editing ? `Edit ${cfg.title.replace(/s$/, '').toLowerCase()}` : (cfg.createLabel ?? `New ${cfg.title.replace(/s$/, '').toLowerCase()}`)} size="lg"
+    <Dialog open={open} onOpenChange={onOpenChange} title={editing ? `Edit ${singular(cfg.title)}` : (cfg.createLabel ?? `New ${singular(cfg.title)}`)} size="lg"
       footer={<>
         <Button variant="secondary" onClick={() => onOpenChange(false)}>Cancel</Button>
         <Button loading={save.isPending} onClick={form.handleSubmit((v) => save.mutate(v as any))}>{editing ? 'Save changes' : 'Create'}</Button>
@@ -247,7 +255,7 @@ export function CrudPage({ cfg }: { cfg: CrudConfig }) {
     } as Column<any>] : []),
   ]
 
-  const createBtn = writable ? <Button onClick={() => { setEditing(null); setOpen(true) }}><Plus /> {cfg.createLabel ?? `New ${cfg.title.replace(/s$/, '').toLowerCase()}`}</Button> : null
+  const createBtn = writable ? <Button onClick={() => { setEditing(null); setOpen(true) }}><Plus /> {cfg.createLabel ?? `New ${singular(cfg.title)}`}</Button> : null
 
   return (
     <div>

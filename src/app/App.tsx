@@ -103,7 +103,7 @@ function ReportRoute() { const { report } = useParams(); return <P.ReportView ke
 /** Signs out after the configured inactivity period. */
 function IdleLogout() {
   const { session, signOut } = useAuth()
-  const s = useQuery({ queryKey: ['company-settings'], enabled: !!session, queryFn: async () => (await db.from('company_settings').select('session_timeout_minutes').maybeSingle()).data })
+  const s = useQuery({ queryKey: ['company-settings', 'session-timeout'], enabled: !!session, queryFn: async () => (await db.from('company_settings').select('session_timeout_minutes').maybeSingle()).data })
   useEffect(() => {
     if (!session) return
     const ms = (s.data?.session_timeout_minutes ?? 480) * 60_000

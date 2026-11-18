@@ -124,7 +124,7 @@ export const EssApprovals = () => <ApprovalsInbox title="Team approvals" />
 export function EssProfile() {
   const { access, profile } = useAuth()
   const home = useRpc<any>(['my-home'], 'my_home', undefined, !!access?.employee_id)
-  const emp = useQuery({ queryKey: ['employee', access?.employee_id], enabled: !!access?.employee_id, queryFn: () => unwrap<any>(db.from('employees').select('*, departments!employees_department_id_fkey(name), designations(name), locations(name), manager:employees!employees_reporting_manager_id_fkey(first_name, last_name)').eq('id', access!.employee_id).single()) })
+  const emp = useQuery({ queryKey: ['employee', access?.employee_id], enabled: !!access?.employee_id, queryFn: () => unwrap<any>(db.from('employees').select('*, departments!employees_department_id_fkey(name), designations(name), locations(name), manager:reporting_manager_id(first_name, last_name)').eq('id', access!.employee_id).single()) })
   const [consent, setConsent] = useState<'biometric' | 'location' | null>(null)
   const [pw, setPw] = useState(false)
   const e = emp.data

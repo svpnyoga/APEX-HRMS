@@ -80,7 +80,7 @@ function KV({ items }: { items: [string, React.ReactNode][] }) {
 }
 
 function useEmp(id: string) {
-  return useQuery({ queryKey: ['employee', id], queryFn: () => unwrap<any>(db.from('employees').select('*, departments!employees_department_id_fkey(name), designations(name), locations(name), shifts(name, start_time, end_time), manager:employees!employees_reporting_manager_id_fkey(id, first_name, last_name)').eq('id', id).single()) })
+  return useQuery({ queryKey: ['employee', id], queryFn: () => unwrap<any>(db.from('employees').select('*, departments!employees_department_id_fkey(name), designations(name), locations(name), shifts(name, start_time, end_time), manager:reporting_manager_id(id, first_name, last_name)').eq('id', id).single()) })
 }
 
 export function EmployeeProfile() {
@@ -333,7 +333,7 @@ export function EmployeeHistoryPage() {
 // ---------------- master data ----------------
 export const departmentsCfg: CrudConfig = {
   title: 'Departments', description: 'Organisation units. Department heads can be approvers in workflows.',
-  table: 'departments', select: '*, parent:departments!departments_parent_id_fkey(name), head:employees!departments_head_fk(first_name, last_name)', permission: 'employees.manage',
+  table: 'departments', select: '*, parent:parent_id(name), head:employees!departments_head_fk(first_name, last_name)', permission: 'employees.manage',
   filter: (q) => q.is('deleted_at', null), orderBy: { column: 'name' }, remove: { column: 'deleted_at', value: new Date().toISOString() },
   columns: [{ key: 'name', header: 'Department' }, { key: 'code', header: 'Code' }, { key: 'parent', header: 'Parent', value: (r) => r.parent?.name },
     { key: 'head', header: 'Head', value: (r) => (r.head ? `${r.head.first_name} ${r.head.last_name}` : null) }, { key: 'is_active', header: 'Active', value: (r) => (r.is_active ? 'Yes' : 'No') }],
