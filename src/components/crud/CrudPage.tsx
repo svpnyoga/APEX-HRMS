@@ -66,7 +66,7 @@ export type CrudConfig = {
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
-function buildSchema(fields: FieldDef[]) {
+export function buildSchema(fields: FieldDef[]) {
   const shape: Record<string, z.ZodTypeAny> = {}
   for (const f of fields) {
     let s: z.ZodTypeAny
@@ -75,7 +75,8 @@ function buildSchema(fields: FieldDef[]) {
         let n = z.coerce.number({ error: `${f.label} must be a number` })
         if (f.min !== undefined) n = n.min(f.min, `${f.label} must be at least ${f.min}`)
         if (f.max !== undefined) n = n.max(f.max, `${f.label} must be at most ${f.max}`)
-        s = f.required ? n : z.union([n, z.literal('').transform(() => null), z.null()]).optional()
+        // Empty must be checked before coercion: z.coerce.number('') is 0, which silently turned blank optional fields into 0.
+        s = f.required ? n : z.union([z.literal('').transform(() => null), z.null(), n]).optional()
         break
       }
       case 'switch': s = z.boolean().default(false); break
