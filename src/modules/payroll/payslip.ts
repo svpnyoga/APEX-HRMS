@@ -1,4 +1,4 @@
-import { db, unwrap } from '@/lib/api'
+import { db, rpc, unwrap } from '@/lib/api'
 import { fmtDate } from '@/lib/utils'
 
 const inr = (n: unknown) => Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -19,6 +19,13 @@ function words(n: number): string {
   if (thousand) parts.push(`${two(thousand)} Thousand`)
   if (n) parts.push(three(n))
   return parts.join(' ')
+}
+
+/** 92991.67 -> "Rupees Ninety Two Thousand Nine Hundred Ninety One and Paise Sixty Seven only" (words must match the figure). */
+function amountInWords(amount: number) {
+  const paise = Math.round(amount * 100)
+  const rupees = Math.floor(paise / 100), p = paise % 100
+  return `Rupees ${words(rupees)}${p ? ` and Paise ${words(p)}` : ''} only`
 }
 
 /** Generates the payslip PDF in the browser from RLS-protected data. */
@@ -68,7 +75,7 @@ export async function downloadPayslip(payslipId: string) {
   doc.setFillColor(230, 245, 236); doc.roundedRect(40, y, W - 80, 46, 6, 6, 'F')
   doc.setFontSize(10); doc.setTextColor(21, 128, 61); doc.text('Net pay', 54, y + 19)
   doc.setFontSize(16); doc.text(`Rs. ${inr(e.net_pay)}`, W - 54, y + 22, { align: 'right' })
-  doc.setFontSize(8.5); doc.setTextColor(90); doc.text(`Rupees ${words(Number(e.net_pay))} only`, 54, y + 36)
+  doc.setFontSize(8.5); doc.setTextColor(90); doc.text(amountInWords(Number(e.net_pay)), 54, y + 36)
   y += 64
   if (employer.length) {
     doc.setFontSize(8.5); doc.setTextColor(110)
@@ -78,5 +85,9 @@ export async function downloadPayslip(payslipId: string) {
   doc.setFontSize(8); doc.setTextColor(140)
   doc.text('This is a system-generated payslip and does not require a signature.', 40, doc.internal.pageSize.getHeight() - 30)
   doc.save(`${ps.payslip_number}.pdf`)
-  if (!ps.viewed_at) await db.from('payslips').update({ viewed_at: new Date().toISOString() }).eq('id', payslipId)
+  // "Viewed" means the employee opened it; HR downloading a copy must not mark it.
+  if (!ps.viewed_at) {
+    const me = await rpc<string | null>('current_employee_id').catch(() => null)
+    if (me && me === ps.employee_id) await db.from('payslips').update({ viewed_at: new Date().toISOString() }).eq('id', payslipId)
+  }
 }
