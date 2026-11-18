@@ -111,7 +111,7 @@ export function HrOverview() {
                   {d.recent_activity.map((a: any, i: number) => (
                     <li key={i} className="flex items-center gap-3 px-5 py-2.5 text-sm">
                       <Badge>{ENTITY_LABEL[a.table_name] ?? titleCase(a.table_name ?? a.action)}</Badge>
-                      <span className="min-w-0 flex-1 truncate">{a.note ?? `${titleCase(a.action)} on ${a.table_name}`}</span>
+                      <span className="min-w-0 flex-1 truncate">{a.note ?? activityText(a)}</span>
                       <span className="hidden text-muted sm:inline">{a.actor ?? 'System'}</span>
                       <span className="text-xs text-subtle">{ago(a.created_at)}</span>
                     </li>
@@ -243,4 +243,12 @@ export function ManagementAnalytics() {
       </div>
     </div>
   )
+}
+
+const VERB: Record<string, string> = { INSERT: 'added', UPDATE: 'updated', DELETE: 'removed' }
+/** "INSERT on user_roles" -> "User role added". */
+function activityText(a: { action?: string; table_name?: string }) {
+  const what = (ENTITY_LABEL[a.table_name ?? ''] ?? titleCase(a.table_name ?? 'record')).replace(/ies$/, 'y').replace(/s$/, '')
+  const verb = VERB[(a.action ?? '').toUpperCase()] ?? (a.action ?? '').toLowerCase()
+  return `${what} ${verb}`
 }

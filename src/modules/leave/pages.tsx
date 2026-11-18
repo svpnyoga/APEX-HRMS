@@ -120,7 +120,7 @@ export function ApplyLeaveForm({ onDone }: { onDone?: () => void }) {
   const submit = useAction(async () => {
     const doc = files[0] ? await uploadFile('employee-documents', orgId, employeeId, files[0]) : null
     return rpc('apply_leave', { p_leave_type: type, p_start: start, p_end: half ? start : end, p_half: half, p_session: half ? session : null, p_reason: reason, p_document_path: doc })
-  }, { success: 'Leave applied — your manager has been notified', invalidate: [['leave'], ['my-home']], onSuccess: () => { setReason(''); setFiles([]); onDone?.() } })
+  }, { success: 'Leave applied — sent for approval', invalidate: [['leave'], ['my-home']], onSuccess: () => { setReason(''); setFiles([]); onDone?.() } })
   const calendarDays = Math.max(0, (new Date(end).getTime() - new Date(start).getTime()) / 864e5 + 1)
   return (
     <div className="space-y-4">
