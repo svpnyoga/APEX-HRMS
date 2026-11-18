@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { addDays, eachDayOfInterval, endOfMonth, format, startOfMonth, startOfWeek, subDays } from 'date-fns'
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
@@ -108,7 +108,15 @@ export function AttendanceDashboard() {
 function ManualAttendanceDialog({ open, onOpenChange, initial }: { open: boolean; onOpenChange: (o: boolean) => void; initial?: { employee_id?: string; work_date?: string } }) {
   const [emp, setEmp] = useState<string | null>(initial?.employee_id ?? null)
   const [date, setDate] = useState(initial?.work_date ?? isoDate())
-  const [tin, setIn] = useState('09:30'); const [tout, setOut] = useState('18:30'); const [reason, setReason] = useState('')
+  const [tin, setIn] = useState(''); const [tout, setOut] = useState(''); const [reason, setReason] = useState('')
+  const [touched, setTouched] = useState(false)
+  // Default the times to the employee's own shift for that day (schedule > shift > company default).
+  const shift = useQuery({ queryKey: ['employee-shift', emp, date], enabled: !!emp && !!date,
+    queryFn: async () => (await unwrap<any[]>(db.rpc('employee_shift', { p_employee: emp, p_date: date })))?.[0] ?? null })
+  useEffect(() => {
+    if (touched || !shift.data) return
+    setIn(String(shift.data.start_time ?? '').slice(0, 5)); setOut(String(shift.data.end_time ?? '').slice(0, 5))
+  }, [shift.data, touched])
   const save = useAction(() => rpc('manual_attendance', { p_employee: emp, p_date: date, p_in: tin || null, p_out: tout || null, p_reason: reason }), {
     success: 'Attendance recorded and marked regularised', invalidate: [['attendance']], onSuccess: () => onOpenChange(false),
   })
@@ -118,7 +126,7 @@ function ManualAttendanceDialog({ open, onOpenChange, initial }: { open: boolean
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Employee" required className="sm:col-span-2"><EmployeePicker value={emp} onChange={setEmp} /></Field>
         <Field label="Date" required><Input type="date" value={date} max={isoDate()} onChange={(e) => setDate(e.target.value)} /></Field>
-        <div className="grid grid-cols-2 gap-2"><Field label="In"><Input type="time" value={tin} onChange={(e) => setIn(e.target.value)} /></Field><Field label="Out"><Input type="time" value={tout} onChange={(e) => setOut(e.target.value)} /></Field></div>
+        <div className="grid grid-cols-2 gap-2"><Field label="In"><Input type="time" value={tin} onChange={(e) => { setTouched(true); setIn(e.target.value) }} /></Field><Field label="Out"><Input type="time" value={tout} onChange={(e) => { setTouched(true); setOut(e.target.value) }} /></Field></div>
         <Field label="Reason" required className="sm:col-span-2"><Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Biometric device offline at Hosur gate" /></Field>
       </div>
     </Dialog>
