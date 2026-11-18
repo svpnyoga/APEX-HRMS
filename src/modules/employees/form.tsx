@@ -58,7 +58,12 @@ export function EmployeeForm({ open, onOpenChange, employee, onSaved }: { open: 
     payload.last_name = v.last_name ?? ''
     let id = employee?.id
     if (employee) await unwrap(db.from('employees').update(payload).eq('id', employee.id).select('id'))
-    else id = (await unwrap<any[]>(db.from('employees').insert({ ...payload, organisation_id: orgId }).select('id')))[0].id
+    else {
+      // Generate the id here and skip RETURNING: the read-back policy (can_view_employee) runs against a
+      // snapshot that does not contain the new row yet, so insert(...).select() is always rejected by RLS.
+      id = crypto.randomUUID()
+      await unwrap(db.from('employees').insert({ ...payload, id, organisation_id: orgId }))
+    }
     if (invite) {
       const { error } = await supabase.functions.invoke('admin-users', { body: { action: 'invite', employee_id: id, email: v.official_email, full_name: `${v.first_name} ${v.last_name}`.trim(), roles: [v.is_field_employee ? 'field_employee' : 'employee'] } })
       if (error) toast.error(`Employee saved, but the invite failed: ${error.message}. Deploy the admin-users edge function (see docs).`)
