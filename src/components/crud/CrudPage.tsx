@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -181,6 +181,9 @@ export function CrudDialog({ cfg, open, onOpenChange, editing }: { cfg: CrudConf
     return base
   }, [editing, cfg])
   const form = useForm({ resolver: zodResolver(schema), values: initial })
+  // The dialog stays mounted between uses and `initial` is unchanged for consecutive "New" records, so without an
+  // explicit reset the previous record's typed values reappear (e.g. PF's wage ceiling leaking into a new ESI rule).
+  useEffect(() => { if (open) form.reset(initial) }, [open, initial]) // eslint-disable-line react-hooks/exhaustive-deps
   const save = useAction(async (values: Record<string, any>) => {
     let payload: Record<string, any> = {}
     for (const f of cfg.fields) {
