@@ -20,7 +20,8 @@ import { cn } from '@/lib/utils'
 
 /** 'Leave policies' -> 'leave policy', 'Shifts' -> 'shift', 'Addresses' -> 'address'. */
 function singular(title: string) {
-  const t = title.toLowerCase()
+  // lower-case each word but keep acronyms ('PT slabs' -> 'PT slab', not 'pt slab')
+  const t = title.split(' ').map((w) => (w.length > 1 && w === w.toUpperCase() ? w : w.toLowerCase())).join(' ')
   if (/ies$/.test(t)) return t.replace(/ies$/, 'y')
   if (/(ss|sh|ch|x)es$/.test(t)) return t.replace(/es$/, '')
   return t.replace(/s$/, '')
