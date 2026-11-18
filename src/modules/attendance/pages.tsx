@@ -25,9 +25,10 @@ import { ClockPanel } from './clock'
 
 const REG_SELECT = 'id, employee_id, employee_code, employee_name, department_name, designation_name, work_date, first_in, last_out, worked_minutes, late_minutes, early_minutes, overtime_minutes, status, is_late, is_early_departure, missing_checkout, is_offsite, is_regularised, is_flagged, site_name, shift_name, remarks'
 
-function useRegister(from: string, to: string, extra?: (q: any) => any) {
+/** `filterKey` must identify the filter: the function's source text is the same for every value it closes over. */
+function useRegister(from: string, to: string, extra?: (q: any) => any, filterKey = '') {
   return useQuery({
-    queryKey: ['attendance', 'register', from, to, String(extra)],
+    queryKey: ['attendance', 'register', from, to, filterKey],
     queryFn: async () => {
       let q: any = db.from('v_attendance_register').select(REG_SELECT).gte('work_date', from).lte('work_date', to).order('work_date', { ascending: false }).limit(5000)
       if (extra) q = extra(q)
@@ -139,7 +140,7 @@ export function DailyAttendance() {
   const [date, setDate] = useState(isoDate())
   const [status, setStatus] = useState('')
   const [manual, setManual] = useState<{ employee_id?: string; work_date?: string } | null>(null)
-  const reg = useRegister(date, date, status ? (q) => q.eq('status', status) : undefined)
+  const reg = useRegister(date, date, status ? (q) => q.eq('status', status) : undefined, `status:${status}`)
   const confirmAbsence = useAction(({ id, remarks }: { id: string; remarks?: string }) => rpc('confirm_absence', { p_record: id, p_remarks: remarks ?? 'Confirmed by HR' }), { success: 'Absence confirmed', invalidate: [['attendance']] })
   const cols: Column<any>[] = [...recordCols(false), ...(can('attendance.manage') ? [{
     key: '_actions', header: '', sortable: false, exportable: false, className: 'text-right', cell: (r: any) => (
@@ -237,7 +238,7 @@ export function MonthlyRegister() {
 export function AttendanceCalendarView({ employeeId, compact }: { employeeId: string; compact?: boolean }) {
   const [month, setMonth] = useState(startOfMonth(new Date()))
   const from = isoDate(startOfWeek(month, { weekStartsOn: 1 })), to = isoDate(addDays(endOfMonth(month), 7))
-  const reg = useRegister(from, to, (q) => q.eq('employee_id', employeeId))
+  const reg = useRegister(from, to, (q) => q.eq('employee_id', employeeId), `emp:${employeeId}`)
   const hol = useQuery({ queryKey: ['holidays', from], queryFn: () => unwrap<any[]>(db.from('holidays').select('holiday_date, name').gte('holiday_date', from).lte('holiday_date', to)) })
   const by = new Map((reg.data ?? []).map((r) => [r.work_date, r]))
   const holBy = new Map((hol.data ?? []).map((h) => [h.holiday_date, h.name]))
@@ -279,7 +280,7 @@ export function ClockPage() {
 export function AttendanceExceptions({ kind }: { kind: 'late' | 'early' | 'missing' }) {
   const [from, setFrom] = useState(isoDate(startOfMonth(new Date())))
   const [to, setTo] = useState(isoDate())
-  const reg = useRegister(from, to, (q) => (kind === 'late' ? q.eq('is_late', true) : kind === 'early' ? q.eq('is_early_departure', true) : q.eq('missing_checkout', true)))
+  const reg = useRegister(from, to, (q) => (kind === 'late' ? q.eq('is_late', true) : kind === 'early' ? q.eq('is_early_departure', true) : q.eq('missing_checkout', true)), `kind:${kind}`)
   const meta = { late: { t: 'Late arrivals', d: 'Check-ins after the shift start plus the grace period. Approved permissions are excluded automatically.' },
     early: { t: 'Early departures', d: 'Check-outs before the shift end minus the early-departure allowance.' },
     missing: { t: 'Missing check-outs', d: 'Days with a check-in but no check-out. Employees can submit regularisation; HR can correct directly.' } }[kind]
