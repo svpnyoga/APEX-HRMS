@@ -235,7 +235,7 @@ export function FaceScanner({ mode, providerId = 'human-faceres-v1', thresholds 
         )}
       </div>
       <div className="flex min-h-[52px] items-center justify-center border-t border-white/10 px-4 py-3 text-center text-[15px] font-medium" role="status" aria-live="polite">
-        {phase === 'loading' ? <span className="text-white/70">{message}</span> : active ? message : ok ? (resultLabel?.text ?? 'Done') : failed ? 'Check failed' : 'Ready'}
+        {phase === 'loading' ? <span className="text-white/70">{message}</span> : active ? message : ok ? (resultLabel ? (resultLabel.tone === 'success' ? 'Done' : 'Not verified') : 'Done') : failed ? 'Check failed' : 'Ready'}
       </div>
     </div>
   )
