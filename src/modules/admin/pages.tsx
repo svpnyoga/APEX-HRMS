@@ -123,6 +123,9 @@ export function RolesPage() {
     if (src?.role_permissions?.length) await unwrap(db.from('role_permissions').insert(src.role_permissions.filter((p: any) => p.permission_code !== '*').map((p: any) => ({ role_id: nr.id, permission_code: p.permission_code }))).select('role_id'))
     return nr.id
   }, { success: 'Role created', invalidate: [['admin', 'roles'], ['lookup', 'roles']], onSuccess: (id) => { setRole(id); setNewRole(false) } })
+  const confirmDel = useConfirm()
+  const remove = useAction((id: string) => unwrap(db.from('roles').delete().eq('id', id).select('id')), { success: 'Role deleted', invalidate: [['admin', 'roles'], ['admin', 'users'], ['lookup', 'roles']], onSuccess: () => setRole('') })
+  const holders = useQuery({ queryKey: ['admin', 'role-holders', r?.id], enabled: !!r?.id && !r?.is_system, queryFn: async () => (await db.from('user_roles').select('user_id', { count: 'exact', head: true }).eq('role_id', r.id)).count ?? 0 })
   const modules = useMemo(() => [...new Set((perms.data ?? []).map((p) => p.module))], [perms.data])
   const editable = can('admin.roles') && r && !has.has('*')
   const [nv, setNv] = useState({ code: '', name: '', copy: '' })
@@ -139,7 +142,11 @@ export function RolesPage() {
         <QueryView q={perms}>
           {(ps) => (
             <Card>
-              <CardHeader title={r?.name ?? ''} description={has.has('*') ? 'Super administrator — has every permission; cannot be edited.' : r?.description} />
+              <CardHeader title={r?.name ?? ''} description={has.has('*') ? 'Super administrator — has every permission; cannot be edited.' : r?.is_system ? `Built-in role (${r.code}) — permissions can be adjusted, but it can't be deleted.` : r?.description ?? `Custom role (${r?.code})`}
+                actions={can('admin.roles') && r && !r.is_system && <Button size="sm" variant="ghost" loading={remove.isPending} onClick={async () => {
+                  const n = holders.data ?? 0
+                  if ((await confirmDel({ title: `Delete role “${r.name}”?`, description: n ? `${n} user${n === 1 ? '' : 's'} will lose this role and its permissions.` : 'Nobody has this role.', confirmLabel: 'Delete role', danger: true })).ok) remove.mutate(r.id)
+                }}><Trash2 /> Delete role</Button>} />
               <div className="divide-y divide-line">
                 {modules.map((m) => (
                   <div key={m} className="grid gap-2 px-5 py-3 sm:grid-cols-[160px_1fr]">
