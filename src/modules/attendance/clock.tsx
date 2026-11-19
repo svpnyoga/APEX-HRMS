@@ -19,11 +19,12 @@ type Geo = { lat: number; lng: number; accuracy: number; status: 'ok' | 'denied'
 function getPosition(): Promise<Geo> {
   return new Promise((resolve) => {
     if (!navigator.geolocation) return resolve({ lat: 0, lng: 0, accuracy: 0, status: 'unavailable' })
-    navigator.geolocation.getCurrentPosition(
-      (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy, status: p.coords.accuracy > 150 ? 'low_accuracy' : 'ok' }),
-      (e) => resolve({ lat: 0, lng: 0, accuracy: 0, status: e.code === 1 ? 'denied' : 'unavailable' }),   // never blocks attendance
-      { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 },
-    )
+    const ok = (p: GeolocationPosition) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy, status: p.coords.accuracy > 150 ? 'low_accuracy' : 'ok' })
+    const fail = (e: GeolocationPositionError) => resolve({ lat: 0, lng: 0, accuracy: 0, status: e.code === 1 ? 'denied' : 'unavailable' })   // never blocks attendance
+    // precise fix first; if that times out, accept a quicker approximate / recent one
+    navigator.geolocation.getCurrentPosition(ok, (e) => e.code === 1 ? fail(e)
+      : navigator.geolocation.getCurrentPosition(ok, fail, { enableHighAccuracy: false, timeout: 8000, maximumAge: 300_000 }),
+      { enableHighAccuracy: true, timeout: 10_000, maximumAge: 30_000 })
   })
 }
 
