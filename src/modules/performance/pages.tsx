@@ -180,7 +180,7 @@ function ReviewForm({ review, onClose }: { review: any; onClose: () => void }) {
   const [ratings, setRatings] = useState<Record<string, { rating: number; comment: string }>>({})
   const [overall, setOverall] = useState<number | ''>(''); const [strengths, setStrengths] = useState(review.strengths ?? ''); const [improve, setImprove] = useState(review.improvements ?? ''); const [comments, setComments] = useState(review.comments ?? '')
   const readOnly = review.status === 'submitted'
-  const weighted = useMemo(() => { const gs = goals.data ?? []; const w = gs.reduce((a, g) => a + (ratings[g.id] ? Number(g.weight) : 0), 0); return w ? (gs.reduce((a, g) => a + (ratings[g.id]?.rating ?? 0) * Number(g.weight), 0) / w).toFixed(2) : '—' }, [goals.data, ratings])
+  const weighted = useMemo(() => { const gs = goals.data ?? []; const w = gs.reduce((a, g) => a + (ratings[g.id] ? Number(g.weight) : 0), 0); const n = gs.filter((g) => ratings[g.id]).length; if (n < gs.length) return `— (${n} of ${gs.length} goals rated)`; return w ? (gs.reduce((a, g) => a + (ratings[g.id]?.rating ?? 0) * Number(g.weight), 0) / w).toFixed(2) : '—' }, [goals.data, ratings])
   const submit = useAction(() => rpc('submit_appraisal_review', { p_review: review.id, p_ratings: Object.entries(ratings).map(([goal_id, r]) => ({ goal_id, rating: r.rating, comment: r.comment })), p_overall: overall || null, p_strengths: strengths, p_improvements: improve, p_comments: comments }), {
     success: 'Review submitted', invalidate: [['performance']], onSuccess: onClose,
   })
