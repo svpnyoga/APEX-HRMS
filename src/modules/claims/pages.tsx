@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { Banknote, ExternalLink, Paperclip, Plus, Send, AlertTriangle, Copy } from 'lucide-react'
+import { Banknote, ExternalLink, Paperclip, Plus, Send, AlertTriangle, Copy, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import { db, rpc, unwrap } from '@/lib/api'
 import { useAuth, useMe } from '@/app/auth'
@@ -123,9 +123,19 @@ export function SubmitClaimPage() {
 export function ClaimDetail({ claim, onClose }: { claim: any; onClose: () => void }) {
   const att = useQuery({ queryKey: ['claims', 'att', claim.id], queryFn: () => unwrap<any[]>(db.from('claim_attachments').select('*').eq('claim_id', claim.id)) })
   const submit = useAction(() => rpc('submit_claim', { p_claim: claim.id }), { success: 'Claim submitted', invalidate: [['claims']], onSuccess: onClose })
+  const [editing, setEditing] = useState(false)
+  const editable = ['draft', 'rejected'].includes(claim.status) && claim.is_mine
+  const fields = { id: claim.id, category_id: claim.category_id, title: claim.title, description: claim.description ?? '', expense_date: claim.expense_date, amount: claim.amount, project_reference: claim.project_reference ?? '', justification: claim.justification ?? '' }
+  if (editing) return (
+    <Drawer open onOpenChange={(o) => !o && onClose()} title={claim.status === 'rejected' ? 'Edit and resubmit' : 'Edit claim'} description={`${claim.claim_number} · ${claim.category_name}`}>
+      {claim.rejection_reason && <div className="mb-4 rounded-md bg-danger-soft p-3 text-sm text-danger"><b>Rejected:</b> {claim.rejection_reason}</div>}
+      {(att.data ?? []).length > 0 && <p className="mb-3 text-sm text-muted">Already attached: {att.data!.map((a) => a.file_name).join(', ')}</p>}
+      <ClaimForm existing={fields} onDone={onClose} />
+    </Drawer>
+  )
   return (
     <Drawer open onOpenChange={(o) => !o && onClose()} title={claim.title} description={`${claim.claim_number} · ${claim.category_name}`}
-      footer={['draft', 'rejected'].includes(claim.status) && claim.is_mine ? <Button onClick={() => submit.mutate()} loading={submit.isPending}><Send /> {claim.status === 'rejected' ? 'Resubmit' : 'Submit'}</Button> : undefined}>
+      footer={editable ? <><Button variant="secondary" onClick={() => setEditing(true)}><Pencil /> {claim.status === 'rejected' ? 'Edit & resubmit' : 'Edit'}</Button><Button onClick={() => submit.mutate()} loading={submit.isPending}><Send /> {claim.status === 'rejected' ? 'Resubmit as is' : 'Submit'}</Button></> : undefined}>
       <dl className="grid grid-cols-2 gap-4 text-sm">
         <div><dt className="text-muted">Amount</dt><dd className="figure text-2xl">{money(claim.amount, true)}</dd></div>
         <div><dt className="text-muted">Status</dt><dd className="mt-1"><StatusBadge status={claim.status} /></dd></div>
