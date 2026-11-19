@@ -16,6 +16,10 @@ export const moneyShort = (v: number) => {
   if (a >= 1e3) return `₹${t(v / 1e3)}k`
   return `₹${Math.round(v)}`
 }
+/** "12.0000% of 15000.00" -> "12% of 15,000"; "0.7500%" -> "0.75%" (calculation notes stored by the database). */
+export const cleanBasis = (b?: string | null) =>
+  (b ?? '').replace(/(\d+)\.(\d*?)0+%/g, (_m, i, d) => (d ? `${i}.${d}%` : `${i}%`))
+    .replace(/\b(\d{4,})(\.00)?\b/g, (_m, n) => Number(n).toLocaleString('en-IN'))
 export const money = (v: unknown, decimals = false) => (v === null || v === undefined || v === '' ? '—' : (decimals ? inr2 : inr).format(Number(v)))
 export const number = (v: unknown) => (v === null || v === undefined ? '—' : num.format(Number(v)))
 

@@ -23,3 +23,15 @@ describe('moneyShort axis labels', () => {
     expect(moneyShort(19870135)).toBe('₹2Cr')
   })
 })
+
+import { cleanBasis } from '@/lib/utils'
+describe('cleanBasis', () => {
+  it('tidies database calculation notes', () => {
+    expect(cleanBasis('12.0000% of 15000.00')).toBe('12% of 15,000')
+    expect(cleanBasis('0.7500% of 19500')).toBe('0.75% of 19,500')
+    expect(cleanBasis('3.2500% of 8400')).toBe('3.25% of 8,400')
+    expect(cleanBasis('9000.00 × 14/30 days')).toBe('9,000 × 14/30 days')
+    expect(cleanBasis('Tamil Nadu slab')).toBe('Tamil Nadu slab')
+    expect(cleanBasis(null)).toBe('')
+  })
+})

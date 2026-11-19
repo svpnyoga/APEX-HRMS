@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, Drawer } from '@/components/ui/dialog'
 import { Field, Input, Select, Textarea } from '@/components/ui/input'
 import { Badge, Card, CardHeader, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/misc'
-import { fmtDate, fmtDateTime, money, titleCase, isoDate, moneyShort } from '@/lib/utils'
+import { fmtDate, fmtDateTime, money, titleCase, isoDate, moneyShort, cleanBasis } from '@/lib/utils'
 import { ApprovalsInbox } from '@/modules/approvals/Inbox'
 import { downloadPayslip } from './payslip'
 
@@ -66,7 +66,7 @@ function EntryDrawer({ entry, onClose }: { entry: any; onClose: () => void }) {
     if (!ls.length) return null
     return (
       <div className="mb-5"><h4 className="mb-2 text-sm font-semibold">{t}</h4>
-        <ul className="divide-y divide-line rounded-lg border border-line">{ls.map((l) => <li key={l.id} className="flex items-start justify-between gap-3 px-3 py-2 text-sm"><span><span>{l.component_name}</span>{l.basis && <span className="block text-xs text-muted">{l.basis}</span>}</span><span className="tnum">{money(l.amount, true)}</span></li>)}</ul>
+        <ul className="divide-y divide-line rounded-lg border border-line">{ls.map((l) => <li key={l.id} className="flex items-start justify-between gap-3 px-3 py-2 text-sm"><span><span>{l.component_name}</span>{l.basis && <span className="block text-xs text-muted">{cleanBasis(l.basis)}</span>}</span><span className="tnum">{money(l.amount, true)}</span></li>)}</ul>
       </div>
     )
   }
@@ -407,12 +407,12 @@ export function FnfPage() {
         { key: 'emp', header: 'Employee', value: (r) => `${r.employees?.first_name} ${r.employees?.last_name}`, cell: (r) => <EmployeeCell name={`${r.employees?.first_name} ${r.employees?.last_name}`} code={r.employees?.employee_code} /> },
         { key: 'last_working_day', header: 'Last day', cell: (r) => fmtDate(r.last_working_day) }, { key: 'service_years', header: 'Service', value: (r) => `${r.service_years} yrs` },
         { key: 'total_earnings', header: 'Earnings', cell: (r) => money(r.total_earnings) }, { key: 'total_deductions', header: 'Deductions', cell: (r) => money(r.total_deductions) },
-        { key: 'net_payable', header: 'Net payable', cell: (r) => <span className={`font-semibold ${Number(r.net_payable) < 0 ? 'text-danger' : ''}`}>{money(r.net_payable)}</span> },
+        { key: 'net_payable', header: 'Net payable', cell: (r) => Number(r.net_payable) < 0 ? <span className="font-semibold text-danger">{money(-Number(r.net_payable), true)} due from employee</span> : <span className="font-semibold">{money(r.net_payable, true)}</span> },
         { key: 'status', header: 'Status', cell: (r) => <StatusBadge status={r.status} /> },
         ...(can('payroll.manage') ? [{ key: '_a', header: '', sortable: false, exportable: false, className: 'text-right', cell: (r: any) => (
           <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
             {r.status === 'draft' && <Button size="sm" variant="secondary" onClick={() => approve.mutate(r.id)}>Approve</Button>}
-            {r.status === 'approved' && <Button size="sm" variant="success" onClick={async () => { const c = await confirm({ title: 'Mark settlement paid?', requireReason: true, reasonLabel: 'Payment reference' }); if (c.ok) pay.mutate({ id: r.id, ref: c.reason! }) }}>Mark paid</Button>}
+            {r.status === 'approved' && <Button size="sm" variant="success" onClick={async () => { const owe = Number(r.net_payable) < 0; const c = await confirm(owe ? { title: `Mark ${money(-Number(r.net_payable), true)} recovered from the employee?`, requireReason: true, reasonLabel: 'Receipt / reference' } : { title: `Mark ${money(r.net_payable, true)} paid to the employee?`, requireReason: true, reasonLabel: 'Payment reference' }); if (c.ok) pay.mutate({ id: r.id, ref: c.reason! }) }}>{Number(r.net_payable) < 0 ? 'Mark recovered' : 'Mark paid'}</Button>}
           </div>
         ) } as Column<any>] : []),
       ]} emptyTitle="No settlements yet" />
@@ -433,11 +433,13 @@ function FnfDetail({ s, onClose }: { s: any; onClose: () => void }) {
     <Drawer open onOpenChange={(o) => !o && onClose()} title={`${s.employees?.first_name} ${s.employees?.last_name}`} description={`Last working day ${fmtDate(s.last_working_day)} · ${s.service_years} years of service`}>
       {(['earning', 'deduction'] as const).map((t) => (
         <div key={t} className="mb-5"><h4 className="mb-2 text-sm font-semibold">{t === 'earning' ? 'Payable' : 'Recoverable'}</h4>
-          <ul className="divide-y divide-line rounded-lg border border-line">{(lines.data ?? []).filter((l) => l.line_type === t).map((l) => <li key={l.id} className="flex justify-between gap-3 px-3 py-2 text-sm"><span>{l.title}{l.basis && <span className="block text-xs text-muted">{l.basis}</span>}</span><span className="tnum">{money(l.amount)}</span></li>)}
+          <ul className="divide-y divide-line rounded-lg border border-line">{(lines.data ?? []).filter((l) => l.line_type === t).map((l) => <li key={l.id} className="flex justify-between gap-3 px-3 py-2 text-sm"><span>{l.title}{l.basis && <span className="block text-xs text-muted">{cleanBasis(l.basis)}</span>}</span><span className="tnum">{money(l.amount)}</span></li>)}
             {(lines.data ?? []).filter((l) => l.line_type === t).length === 0 && <li className="px-3 py-2 text-sm text-muted">None</li>}</ul>
         </div>
       ))}
-      <div className="flex items-center justify-between rounded-lg bg-success-soft px-4 py-3"><span className="text-sm text-success">Net payable</span><span className="figure text-2xl text-success">{money(s.net_payable)}</span></div>
+      {Number(s.net_payable) < 0
+        ? <div className="flex items-center justify-between rounded-lg bg-danger-soft px-4 py-3"><span className="text-sm text-danger">Recoverable from employee</span><span className="figure text-2xl text-danger">{money(-Number(s.net_payable), true)}</span></div>
+        : <div className="flex items-center justify-between rounded-lg bg-success-soft px-4 py-3"><span className="text-sm text-success">Net payable</span><span className="figure text-2xl text-success">{money(s.net_payable, true)}</span></div>}
     </Drawer>
   )
 }
