@@ -12,8 +12,11 @@ export async function exportExcel(filename: string, columns: ExportColumn[], row
   const wb = new ExcelJS.Workbook()
   wb.creator = 'Apex HRMS'
   const ws = wb.addWorksheet(sheet.slice(0, 31))
-  ws.columns = columns.map((c) => ({ header: c.header, key: c.key, width: Math.min(40, Math.max(12, c.header.length + 4)) }))
-  rows.forEach((r) => ws.addRow(Object.fromEntries(columns.map((c) => [c.key, cell(c, r)]))))
+  const data = rows.map((r) => Object.fromEntries(columns.map((c) => [c.key, cell(c, r)])))
+  // size each column to its longest value (header included) so names and designations are not cut off
+  ws.columns = columns.map((c) => ({ header: c.header, key: c.key,
+    width: Math.min(50, Math.max(10, c.header.length + 2, ...data.map((d) => String(d[c.key] ?? '').length + 2))) }))
+  data.forEach((d) => ws.addRow(d))
   ws.getRow(1).font = { bold: true }
   ws.views = [{ state: 'frozen', ySplit: 1 }]
   const buf = await wb.xlsx.writeBuffer()

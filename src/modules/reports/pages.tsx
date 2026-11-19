@@ -18,7 +18,7 @@ import { Field, Input, Select } from '@/components/ui/input'
 import { Card, CardHeader, Badge } from '@/components/ui/misc'
 import { cn, fmtDate, fmtTime, isoDate, minutes, money, titleCase } from '@/lib/utils'
 
-type Col = { key: string; header: string; kind?: 'date' | 'money' | 'minutes' | 'time' | 'status' | 'number' | 'bool' }
+type Col = { key: string; header: string; kind?: 'date' | 'money' | 'minutes' | 'time' | 'status' | 'number' | 'bool' | 'label' }
 /** dateDefault: 'ytd' (1 Jan → today, the default), 'year' (whole calendar year, for future-dated leave, joiners and exits),
  *  'none' (no date filter until the user sets one — e.g. the employee register must include everyone who joined in earlier years). */
 type Dataset = { view: string; label: string; dateField?: string; dateDefault?: 'ytd' | 'year' | 'none'; statusField?: string; statuses?: string[]; columns: Col[]; perm?: string; summary?: (rows: any[]) => { label: string; value: any; tone?: any }[]; chart?: { by: string; value?: string; label: string } }
@@ -26,7 +26,7 @@ type Dataset = { view: string; label: string; dateField?: string; dateDefault?: 
 export const DATASETS: Record<string, Dataset> = {
   employees: { view: 'v_employee_register', label: 'Employee register', dateField: 'date_of_joining', dateDefault: 'none', statusField: 'status', statuses: ['onboarding', 'probation', 'active', 'notice', 'exited', 'inactive'],
     columns: [{ key: 'employee_code', header: 'ID' }, { key: 'employee_name', header: 'Name' }, { key: 'department_name', header: 'Department' }, { key: 'designation_name', header: 'Designation' }, { key: 'location_name', header: 'Location' },
-      { key: 'manager_name', header: 'Manager' }, { key: 'employment_type', header: 'Type' }, { key: 'gender', header: 'Gender' }, { key: 'date_of_joining', header: 'Joined', kind: 'date' }, { key: 'exit_date', header: 'Exit', kind: 'date' }, { key: 'status', header: 'Status', kind: 'status' }],
+      { key: 'manager_name', header: 'Manager' }, { key: 'employment_type', header: 'Type', kind: 'label' }, { key: 'gender', header: 'Gender', kind: 'label' }, { key: 'date_of_joining', header: 'Joined', kind: 'date' }, { key: 'exit_date', header: 'Exit', kind: 'date' }, { key: 'status', header: 'Status', kind: 'status' }],
     summary: (r) => [{ label: 'Employees', value: r.length }, { label: 'Active', value: r.filter((x) => ['active', 'probation', 'notice'].includes(x.status)).length, tone: 'success' }, { label: 'Exited', value: r.filter((x) => x.status === 'exited').length }],
     chart: { by: 'department_name', label: 'Headcount by department' } },
   attendance: { view: 'v_attendance_register', label: 'Attendance register', dateField: 'work_date', statusField: 'status', statuses: ['present', 'half_day', 'incomplete', 'absent', 'on_leave', 'holiday', 'weekly_off'],
@@ -86,7 +86,7 @@ const EXTRA: Record<string, (q: any) => any> = {
 
 const fmt = (c: Col, v: any) => {
   if (v === null || v === undefined || v === '') return ''
-  switch (c.kind) { case 'date': return fmtDate(v); case 'money': return money(v); case 'minutes': return minutes(v); case 'time': return fmtTime(v); case 'bool': return v ? 'Yes' : 'No'; case 'status': return titleCase(v); default: return v }
+  switch (c.kind) { case 'date': return fmtDate(v); case 'money': return money(v); case 'minutes': return minutes(v); case 'time': return fmtTime(v); case 'bool': return v ? 'Yes' : 'No'; case 'status': case 'label': return titleCase(v); default: return v }
 }
 
 export function ReportView({ reportKey: rk, columnsOverride, title }: { reportKey?: string; columnsOverride?: string[]; title?: string }) {
