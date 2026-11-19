@@ -132,6 +132,13 @@ export const MyAnnouncements = () => (
   </div>
 )
 
+/** Employee self-service: everything people take part in, in one place. */
+export const EssCommunity = () => (
+  <Tabs defaultValue="surveys"><TabsList><TabsTrigger value="surveys">Surveys</TabsTrigger><TabsTrigger value="events">Events</TabsTrigger><TabsTrigger value="recognition">Recognition</TabsTrigger><TabsTrigger value="feedback">Feedback</TabsTrigger></TabsList>
+    <TabsContent value="surveys"><SurveysPage /></TabsContent><TabsContent value="events"><EventsPage /></TabsContent>
+    <TabsContent value="recognition"><RecognitionPage /></TabsContent><TabsContent value="feedback"><FeedbackSuggestionsPage /></TabsContent></Tabs>
+)
+
 const BADGES: Record<string, { label: string; tone: any }> = {
   teamwork: { label: 'Teamwork', tone: 'primary' }, innovation: { label: 'Innovation', tone: 'info' }, customer_first: { label: 'Customer first', tone: 'success' },
   ownership: { label: 'Ownership', tone: 'warning' }, excellence: { label: 'Excellence', tone: 'primary' }, safety: { label: 'Safety', tone: 'danger' },

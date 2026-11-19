@@ -50,7 +50,7 @@ const P = {
   ReviewsPage: lz(M.perf, 'ReviewsPage'), ReviewStagePage: lz(M.perf, 'ReviewStagePage'), FeedbackPage: lz(M.perf, 'FeedbackPage'), RatingScalesPage: lz(M.perf, 'RatingScalesPage'),
   AppraisalHistoryPage: lz(M.perf, 'AppraisalHistoryPage'),
   AnnouncementsPage: lz(M.eng, 'AnnouncementsPage'), RecognitionPage: lz(M.eng, 'RecognitionPage'), FeedbackSuggestionsPage: lz(M.eng, 'FeedbackSuggestionsPage'),
-  SurveysPage: lz(M.eng, 'SurveysPage'), EventsPage: lz(M.eng, 'EventsPage'), NotificationsPage: lz(M.eng, 'NotificationsPage'), MyAnnouncements: lz(M.eng, 'MyAnnouncements'),
+  SurveysPage: lz(M.eng, 'SurveysPage'), EventsPage: lz(M.eng, 'EventsPage'), NotificationsPage: lz(M.eng, 'NotificationsPage'), MyAnnouncements: lz(M.eng, 'MyAnnouncements'), EssCommunity: lz(M.eng, 'EssCommunity'),
   FieldDashboard: lz(M.field, 'FieldDashboard'), LiveLocationPage: lz(M.field, 'LiveLocationPage'), SiteAttendancePage: lz(M.field, 'SiteAttendancePage'),
   AssignmentsPage: lz(M.field, 'AssignmentsPage'), SitesPage: lz(M.field, 'SitesPage'), GpsTrackingPage: lz(M.field, 'GpsTrackingPage'), GeofencingPage: lz(M.field, 'GeofencingPage'),
   VisitsPage: lz(M.field, 'VisitsPage'), LocationHistoryPage: lz(M.field, 'LocationHistoryPage'),
@@ -265,7 +265,7 @@ export const ROUTES: { path: string; element: ReactNode }[] = [
 const ESS_ROUTES: { path: string; element: ReactNode }[] = [
   { path: '/me', element: mine(<P.EssHome />) }, { path: '/me/attendance', element: mine(<P.EssAttendance />) }, { path: '/me/leave', element: mine(<P.EssLeave />) },
   { path: '/me/claims', element: mine(<P.EssClaims />) }, { path: '/me/payslips', element: mine(<P.EssPayslips />) }, { path: '/me/learning', element: mine(<P.EssLearning />) },
-  { path: '/me/performance', element: mine(<P.EssPerformance />) }, { path: '/me/announcements', element: <P.MyAnnouncements /> }, { path: '/me/approvals', element: <P.EssApprovals /> },
+  { path: '/me/performance', element: mine(<P.EssPerformance />) }, { path: '/me/announcements', element: <P.MyAnnouncements /> }, { path: '/me/community', element: <P.EssCommunity /> }, { path: '/me/approvals', element: <P.EssApprovals /> },
   { path: '/me/profile', element: mine(<P.EssProfile />) }, { path: '/me/resignation', element: mine(<P.EssResignation />) },
 ]
 

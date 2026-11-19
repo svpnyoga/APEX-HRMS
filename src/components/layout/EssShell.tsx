@@ -1,5 +1,6 @@
-import { NavLink, Outlet } from 'react-router-dom'
-import { CalendarDays, Clock, Home, Receipt, Wallet, GraduationCap, Target, Megaphone, UserMinus, Inbox, User } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { CalendarDays, Clock, Home, Receipt, Wallet, GraduationCap, Target, Megaphone, UserMinus, Inbox, User, Users, MoreHorizontal } from 'lucide-react'
 import { useAuth } from '@/app/auth'
 import { cn } from '@/lib/utils'
 import { Logo } from './Sidebar'
@@ -14,15 +15,21 @@ const ITEMS = [
   { to: '/me/learning', label: 'Learning', icon: GraduationCap },
   { to: '/me/performance', label: 'Performance', icon: Target },
   { to: '/me/announcements', label: 'News', icon: Megaphone },
+  { to: '/me/community', label: 'Community', icon: Users },
   { to: '/me/approvals', label: 'Approvals', icon: Inbox, manager: true },
   { to: '/me/profile', label: 'Profile', icon: User },
   { to: '/me/resignation', label: 'Resignation', icon: UserMinus },
 ]
-const MOBILE = ['/me', '/me/attendance', '/me/leave', '/me/claims', '/me/profile']
+const MOBILE = ['/me', '/me/attendance', '/me/leave', '/me/claims']
 
 export function EssShell() {
   const { access } = useAuth()
   const items = ITEMS.filter((i) => !i.manager || access?.is_manager)
+  const [more, setMore] = useState(false)
+  const loc = useLocation()
+  useEffect(() => setMore(false), [loc.pathname])
+  const extra = items.filter((i) => !MOBILE.includes(i.to))
+  const inMore = extra.some((i) => loc.pathname.startsWith(i.to))
   return (
     <div className="flex h-full flex-col">
       <header className="sticky top-0 z-30 border-b border-ink-line bg-ink text-white">
@@ -50,7 +57,22 @@ export function EssShell() {
             <i.icon className="h-5 w-5" />{i.label}
           </NavLink>
         ))}
+        <button type="button" onClick={() => setMore((m) => !m)} aria-expanded={more} className={cn('flex flex-col items-center gap-0.5 py-2 text-[11px]', more || inMore ? 'text-primary' : 'text-muted')}>
+          <MoreHorizontal className="h-5 w-5" />More
+        </button>
       </nav>
+      {more && (
+        <>
+          <button type="button" aria-label="Close menu" className="fixed inset-0 z-20 bg-black/30 md:hidden" onClick={() => setMore(false)} />
+          <div className="fixed inset-x-0 bottom-[calc(56px+env(safe-area-inset-bottom))] z-30 grid grid-cols-3 gap-1 rounded-t-xl border-t border-line bg-surface p-3 md:hidden">
+            {extra.map((i) => (
+              <NavLink key={i.to} to={i.to} className={({ isActive }) => cn('flex flex-col items-center gap-1 rounded-lg py-3 text-xs', isActive ? 'bg-primary-soft text-primary' : 'text-muted hover:bg-raised')}>
+                <i.icon className="h-5 w-5" />{i.label}
+              </NavLink>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   )
 }
