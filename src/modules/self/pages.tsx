@@ -21,7 +21,7 @@ import { MyClaimsPage } from '@/modules/claims/pages'
 import { PayslipsPage } from '@/modules/payroll/pages'
 import { MyLearning } from '@/modules/learning/pages'
 import { GoalsPage, AppraisalHistoryPage, ReviewStagePage } from '@/modules/performance/pages'
-import { ApprovalsInbox } from '@/modules/approvals/Inbox'
+import { ApprovalsInbox, MyRequestStatus } from '@/modules/approvals/Inbox'
 import { DocumentsList } from '@/modules/employees/pages'
 import { VisitControl, VisitsPage } from '@/modules/field/pages'
 import { ResignDialog } from '@/modules/lifecycle/pages'
@@ -99,11 +99,13 @@ export function EssLeave() {
   const { employeeId } = useMe()
   const mine = useLeaveRegister((q) => q.eq('employee_id', employeeId), `mine-${employeeId}`)
   const cancel = useCancelLeave()
+  const [hist, setHist] = useState<any | null>(null)
   return (
     <div className="space-y-5">
       <PageHeader title="Leave" />
       <Card className="p-5"><ApplyLeaveForm /></Card>
-      <Card><CardHeader title="My applications" /><div className="p-3"><DataTable rows={mine.data} columns={leaveCols(false, cancel)} loading={mine.isLoading} searchable={false} emptyTitle="No applications yet" /></div></Card>
+      <Card><CardHeader title="My applications" /><div className="p-3"><DataTable rows={mine.data} columns={leaveCols(false, cancel)} loading={mine.isLoading} searchable={false} emptyTitle="No applications yet" onRowClick={setHist} /></div></Card>
+      <Dialog open={!!hist} onOpenChange={(o) => !o && setHist(null)} title="Approval history" description={hist ? `${hist.leave_type_name} · ${fmtDate(hist.start_date)}` : ''}>{hist && <MyRequestStatus entityType="leave" entityId={hist.id} />}</Dialog>
     </div>
   )
 }

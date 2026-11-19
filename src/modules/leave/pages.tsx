@@ -73,7 +73,7 @@ export const leaveCols = (withEmployee = true, onCancel?: (r: any) => void, onDe
   { key: 'days', header: 'Days', className: 'tnum' },
   { key: 'reason', header: 'Reason', hideOnMobile: true, cell: (r) => <span className="line-clamp-1 max-w-xs">{r.reason}</span> },
   { key: 'applied_at', header: 'Applied', cell: (r) => fmtDate(r.applied_at), hideOnMobile: true },
-  { key: 'status', header: 'Status', cell: (r) => <StatusBadge status={r.status} /> },
+  { key: 'status', header: 'Status', cell: (r) => <div><StatusBadge status={r.status} />{r.decision_comment && ['rejected', 'cancelled'].includes(r.status) && <p className="mt-1 max-w-[16rem] whitespace-normal text-xs text-danger">{r.decision_comment}</p>}</div> },
   ...(onCancel || onDetail ? [{ key: '_actions', header: '', sortable: false, exportable: false, className: 'text-right', cell: (r: any) => (
     <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
       {onDetail && <Button size="sm" variant="ghost" onClick={() => onDetail(r)}>History</Button>}
@@ -161,11 +161,13 @@ export function ApplyLeavePage() {
   const { employeeId } = useMe()
   const mine = useLeaveRegister((q) => q.eq('employee_id', employeeId), `mine-${employeeId}`)
   const cancel = useCancelLeave()
+  const [hist, setHist] = useState<any | null>(null)
   return (
     <div className="space-y-5">
       <PageHeader title="Apply for leave" description="Balances update only after final approval. Overlapping dates and insufficient balance are rejected." />
       <Card className="p-5"><ApplyLeaveForm /></Card>
-      <Card><CardHeader title="My applications" /><div className="p-3"><DataTable rows={mine.data} columns={leaveCols(false, cancel)} loading={mine.isLoading} searchable={false} emptyTitle="No applications yet" /></div></Card>
+      <Card><CardHeader title="My applications" /><div className="p-3"><DataTable rows={mine.data} columns={leaveCols(false, cancel)} loading={mine.isLoading} searchable={false} emptyTitle="No applications yet" onRowClick={setHist} /></div></Card>
+      <Dialog open={!!hist} onOpenChange={(o) => !o && setHist(null)} title="Approval history" description={hist ? `${hist.leave_type_name} · ${fmtDate(hist.start_date)}` : ''}>{hist && <MyRequestStatus entityType="leave" entityId={hist.id} />}</Dialog>
     </div>
   )
 }
