@@ -21,6 +21,7 @@ import { FieldMap, type MapPoint } from './map'
 
 /** Start of a calendar day in the user's own time zone, as an ISO timestamp (not UTC midnight). */
 const dayStart = (d: string, plusDays = 0) => { const x = new Date(`${d}T00:00:00`); x.setDate(x.getDate() + plusDays); return x.toISOString() }
+const distanceM = (a: number, b: number, c: number, d: number) => { const R = 6371000, r = Math.PI / 180, x = Math.sin(((c - a) * r) / 2) ** 2 + Math.cos(a * r) * Math.cos(c * r) * Math.sin(((d - b) * r) / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(x)) }
 const useSites = () => useQuery({ queryKey: ['field', 'sites'], queryFn: () => unwrap<any[]>(db.from('work_sites').select('*').eq('is_active', true)) })
 function useLatest() {
   return useQuery({
@@ -160,7 +161,16 @@ export function GeofencingPage() {
 
 export function VisitsPage({ mine }: { mine?: boolean }) {
   const { employeeId } = useMe()
-  const q = useQuery({ queryKey: ['field', 'visits', mine], queryFn: () => { let x = db.from('v_field_visits').select('*').order('check_in_at', { ascending: false }).limit(1000); if (mine) x = x.eq('employee_id', employeeId); return unwrap<any[]>(x) } })
+  const q = useQuery({ queryKey: ['field', 'visits', mine, employeeId], queryFn: () => { let x = db.from('v_field_visits').select('*').order('check_in_at', { ascending: false }).limit(1000); if (mine) x = x.eq('employee_id', employeeId); return unwrap<any[]>(x) } })
+  const sites = useQuery({ queryKey: ['field', 'visit-sites'], enabled: !mine, queryFn: () => unwrap<any[]>(db.from('work_sites').select('id, latitude, longitude, radius_m')) })
+  const siteById = useMemo(() => new Map((sites.data ?? []).map((s) => [s.id, s])), [sites.data])
+  const where = (r: any) => {
+    if (r.check_in_lat == null) return { text: 'No GPS', tone: 'neutral' as const }
+    const s = siteById.get(r.site_id)
+    if (!s?.latitude) return { text: 'Recorded', tone: 'neutral' as const }
+    const d = distanceM(r.check_in_lat, r.check_in_lng, s.latitude, s.longitude)
+    return d <= s.radius_m ? { text: 'At site', tone: 'success' as const } : { text: `${d >= 1000 ? `${(d / 1000).toFixed(1)} km` : `${Math.round(d)} m`} from site`, tone: 'warning' as const }
+  }
   return (
     <div className="space-y-4">
       {!mine && <PageHeader title="Visit history" description="Customer and site visits logged by field staff." />}
@@ -169,6 +179,7 @@ export function VisitsPage({ mine }: { mine?: boolean }) {
         { key: 'check_in_at', header: 'Started', cell: (r) => fmtDateTime(r.check_in_at) }, ...(!mine ? [{ key: 'employee_name', header: 'Employee' } as any] : []),
         { key: 'site_name', header: 'Site', value: (r) => r.site_name ?? '—' }, { key: 'purpose', header: 'Purpose' }, { key: 'duration_minutes', header: 'Duration', value: (r) => Number(r.duration_minutes), cell: (r) => (r.check_out_at ? minutes(r.duration_minutes) : <Badge tone="info">In progress</Badge>) },
         { key: 'outcome', header: 'Outcome', hideOnMobile: true },
+        ...(!mine ? [{ key: 'where', header: 'Check-in location', value: (r: any) => where(r).text, cell: (r: any) => { const w = where(r); return <Badge tone={w.tone}>{w.text}</Badge> } } as any] : []),
       ]} emptyTitle="No visits yet" />
     </div>
   )
@@ -182,12 +193,18 @@ export function VisitControl() {
   const [startOpen, setStartOpen] = useState(false); const [endOpen, setEndOpen] = useState(false); const [consent, setConsent] = useState(false)
   const [site, setSite] = useState(''); const [purpose, setPurpose] = useState(''); const [outcome, setOutcome] = useState(''); const [notes, setNotes] = useState('')
   const watchRef = useRef<number | null>(null)
-  const pos = (): Promise<GeolocationPosition | null> => new Promise((r) => navigator.geolocation ? navigator.geolocation.getCurrentPosition(r, () => r(null), { enableHighAccuracy: true, timeout: 8000 }) : r(null))
+  const lastPos = useRef<GeolocationPosition | null>(null)
+  const pos = (): Promise<GeolocationPosition | null> => new Promise((r) => {
+    const g = navigator.geolocation
+    if (!g) return r(lastPos.current)
+    g.getCurrentPosition(r, () => g.getCurrentPosition(r, () => r(lastPos.current), { enableHighAccuracy: false, maximumAge: 300_000, timeout: 10_000 }), { enableHighAccuracy: true, maximumAge: 60_000, timeout: 15_000 })
+  })
   const visit = open.data
   useEffect(() => {
     if (!visit || !navigator.geolocation || !home.data?.face?.location_consent) return
     let last = 0
     watchRef.current = navigator.geolocation.watchPosition((p) => {
+      lastPos.current = p
       if (Date.now() - last < 120_000) return               // at most every 2 minutes
       last = Date.now()
       rpc('record_location_ping', { p_lat: p.coords.latitude, p_lng: p.coords.longitude, p_accuracy: p.coords.accuracy, p_recorded_at: new Date().toISOString(), p_source: 'visit', p_speed: p.coords.speed }).catch(() => undefined)
@@ -196,8 +213,9 @@ export function VisitControl() {
   }, [visit?.id, home.data?.face?.location_consent]) // eslint-disable-line
   const start = useAction(async () => {
     const p = await pos()
+    lastPos.current = p
     return unwrap(db.from('field_visits').insert({ organisation_id: orgId, employee_id: employeeId, site_id: site || null, purpose, check_in_lat: p?.coords.latitude ?? null, check_in_lng: p?.coords.longitude ?? null }).select('id'))
-  }, { success: 'Visit started', invalidate: [['field']], onSuccess: () => { setStartOpen(false); setPurpose('') } })
+  }, { success: 'Visit started', invalidate: [['field']], onSuccess: () => { setStartOpen(false); setPurpose(''); if (!lastPos.current) toast.message('Location unavailable — the visit is logged without a check-in location') } })
   const end = useAction(async () => {
     const p = await pos()
     return unwrap(db.from('field_visits').update({ check_out_at: new Date().toISOString(), outcome, notes, check_out_lat: p?.coords.latitude ?? null, check_out_lng: p?.coords.longitude ?? null }).eq('id', visit.id).select('id'))
@@ -222,7 +240,7 @@ export function VisitControl() {
       <Dialog open={endOpen} onOpenChange={setEndOpen} title="End visit" footer={<Button loading={end.isPending} onClick={() => end.mutate()}>End visit</Button>}>
         <div className="space-y-4"><Field label="Outcome"><Input value={outcome} onChange={(e) => setOutcome(e.target.value)} /></Field><Field label="Notes"><Textarea value={notes} onChange={(e) => setNotes(e.target.value)} /></Field></div>
       </Dialog>
-      <ConsentDialog open={consent} onOpenChange={setConsent} type="location" onDone={() => home.refetch()} />
+      <ConsentDialog open={consent} onOpenChange={setConsent} type="location" onDone={() => { home.refetch(); navigator.geolocation?.getCurrentPosition((p) => { lastPos.current = p }, () => undefined) }} />
     </Card>
   )
 }
