@@ -13,7 +13,7 @@ import { EmployeeCell } from '@/components/common/pickers'
 import { StatusBadge } from '@/components/common/status'
 import { Card, CardHeader, Avatar, Badge } from '@/components/ui/misc'
 import { Button } from '@/components/ui/button'
-import { ago, fmtDate, money, titleCase, isoDate } from '@/lib/utils'
+import { ago, fmtDate, money, titleCase, isoDate, moneyShort } from '@/lib/utils'
 import { ENTITY_LABEL } from '@/modules/approvals/Inbox'
 
 export function Celebrations() {
@@ -224,7 +224,7 @@ export function ManagementAnalytics() {
           <ChartCard title="Payroll cost" description="Gross, net and employer cost per run" height={300}>
             <ResponsiveContainer>
               <LineChart data={(pay.data ?? []).map((p) => ({ month: fmtDate(p.payroll_periods?.period_month, 'MMM yy'), Gross: Number(p.total_gross), Net: Number(p.total_net), 'Employer cost': Number(p.total_employer_cost) }))}>
-                <CartesianGrid {...GRID} /><XAxis dataKey="month" {...AXIS} /><YAxis {...AXIS} width={70} tickFormatter={(v) => `₹${Math.round(v / 1000)}k`} /><Tooltip {...TOOLTIP} formatter={(v: any) => money(v)} /><Legend wrapperStyle={{ fontSize: 12 }} />
+                <CartesianGrid {...GRID} /><XAxis dataKey="month" {...AXIS} /><YAxis {...AXIS} width={70} tickFormatter={moneyShort} /><Tooltip {...TOOLTIP} formatter={(v: any) => money(v)} /><Legend wrapperStyle={{ fontSize: 12 }} />
                 <Line dataKey="Gross" stroke={SERIES[0]} strokeWidth={2} /><Line dataKey="Net" stroke={SERIES[1]} strokeWidth={2} /><Line dataKey="Employer cost" stroke={SERIES[2]} strokeWidth={2} />
               </LineChart>
             </ResponsiveContainer>

@@ -8,6 +8,14 @@ const inr = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR',
 const inr2 = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const num = new Intl.NumberFormat('en-IN')
 
+/** Compact rupee axis label: 450 -> ₹450, 1200 -> ₹1.2k, 250000 -> ₹2.5L, 12000000 -> ₹1.2Cr (no repeated "₹1k" ticks). */
+export const moneyShort = (v: number) => {
+  const a = Math.abs(v), t = (n: number) => String(Number(n.toFixed(1)))
+  if (a >= 1e7) return `₹${t(v / 1e7)}Cr`
+  if (a >= 1e5) return `₹${t(v / 1e5)}L`
+  if (a >= 1e3) return `₹${t(v / 1e3)}k`
+  return `₹${Math.round(v)}`
+}
 export const money = (v: unknown, decimals = false) => (v === null || v === undefined || v === '' ? '—' : (decimals ? inr2 : inr).format(Number(v)))
 export const number = (v: unknown) => (v === null || v === undefined ? '—' : num.format(Number(v)))
 

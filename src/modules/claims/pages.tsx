@@ -19,7 +19,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, Drawer } from '@/components/ui/dialog'
 import { Field, Input, Select, Textarea } from '@/components/ui/input'
 import { Badge, Card, CardHeader } from '@/components/ui/misc'
-import { errorMessage, fmtDate, isoDate, money, sha256Hex, titleCase } from '@/lib/utils'
+import { errorMessage, fmtDate, isoDate, money, sha256Hex, titleCase, moneyShort } from '@/lib/utils'
 import { ApprovalsInbox, MyRequestStatus } from '@/modules/approvals/Inbox'
 
 export const useClaims = (filter?: (q: any) => any, key = 'all') => useQuery({
@@ -53,7 +53,7 @@ export function ClaimsDashboard() {
         { label: 'Flagged', value: rows.filter((r) => r.status === 'submitted' && (r.policy_violation || r.is_possible_duplicate)).length, tone: 'danger', hint: 'Policy exceptions or possible duplicates' },
       ]} />
       <ChartCard title="Approved spend by category" height={280}>
-        {byCat.length === 0 ? <EmptyState title="No approved claims yet" /> : <ResponsiveContainer><BarChart data={byCat}><CartesianGrid {...GRID} /><XAxis dataKey="name" {...AXIS} /><YAxis {...AXIS} width={60} tickFormatter={(v) => `₹${Math.round(v / 1000)}k`} /><Tooltip {...TOOLTIP} formatter={(v: any) => money(v)} /><Bar dataKey="amount" fill={SERIES[0]} radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer>}
+        {byCat.length === 0 ? <EmptyState title="No approved claims yet" /> : <ResponsiveContainer><BarChart data={byCat}><CartesianGrid {...GRID} /><XAxis dataKey="name" {...AXIS} /><YAxis {...AXIS} width={60} tickFormatter={moneyShort} /><Tooltip {...TOOLTIP} formatter={(v: any) => money(v)} /><Bar dataKey="amount" fill={SERIES[0]} radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer>}
       </ChartCard>
       <DataTable rows={rows.slice(0, 200)} columns={claimCols(true)} loading={q.isLoading} error={q.error} exportName="Claims" />
     </div>

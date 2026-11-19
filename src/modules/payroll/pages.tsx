@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, Drawer } from '@/components/ui/dialog'
 import { Field, Input, Select, Textarea } from '@/components/ui/input'
 import { Badge, Card, CardHeader, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/misc'
-import { fmtDate, fmtDateTime, money, titleCase, isoDate } from '@/lib/utils'
+import { fmtDate, fmtDateTime, money, titleCase, isoDate, moneyShort } from '@/lib/utils'
 import { ApprovalsInbox } from '@/modules/approvals/Inbox'
 import { downloadPayslip } from './payslip'
 
@@ -39,7 +39,7 @@ export function PayrollDashboard() {
       ]} />
       <ChartCard title="Payroll by month" height={300}>
         {chart.length === 0 ? <EmptyState title="No payroll runs yet" /> : (
-          <ResponsiveContainer><BarChart data={chart}><CartesianGrid {...GRID} /><XAxis dataKey="month" {...AXIS} /><YAxis {...AXIS} width={70} tickFormatter={(v) => `₹${Math.round(v / 1000)}k`} /><Tooltip {...TOOLTIP} formatter={(v: any) => money(v)} /><Legend wrapperStyle={{ fontSize: 12 }} />
+          <ResponsiveContainer><BarChart data={chart}><CartesianGrid {...GRID} /><XAxis dataKey="month" {...AXIS} /><YAxis {...AXIS} width={70} tickFormatter={moneyShort} /><Tooltip {...TOOLTIP} formatter={(v: any) => money(v)} /><Legend wrapperStyle={{ fontSize: 12 }} />
             <Bar dataKey="Net" stackId="a" fill={SERIES[1]} /><Bar dataKey="Deductions" stackId="a" fill={SERIES[2]} /><Bar dataKey="Employer contributions" stackId="a" fill={SERIES[0]} radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer>
         )}
       </ChartCard>

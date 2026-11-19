@@ -14,3 +14,12 @@ describe('CrudPage buildSchema optional numbers', () => {
     expect(() => schema.parse({ days: '-1' })).toThrow()
   })
 })
+
+import { moneyShort } from '@/lib/utils'
+describe('moneyShort axis labels', () => {
+  it('keeps small amounts readable and distinct', () => {
+    expect([0, 250, 500, 750, 1000, 1250].map(moneyShort)).toEqual(['₹0', '₹250', '₹500', '₹750', '₹1k', '₹1.3k'])
+    expect(moneyShort(250000)).toBe('₹2.5L')
+    expect(moneyShort(19870135)).toBe('₹2Cr')
+  })
+})

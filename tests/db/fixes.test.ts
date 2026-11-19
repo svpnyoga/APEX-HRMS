@@ -42,6 +42,19 @@ describe('overtime on a normal shift', () => {
   })
 })
 
+describe('manual attendance without check-out', () => {
+  it('stays a missing check-out (not regularised) so the dashboard still counts it', async () => {
+    const d = await workday(70)
+    await asUser(db, USERS.hr, (q) => q(`select manual_attendance($1, $2::date, '09:05', null, 'forgot to punch out')`, [EMP.meena, d]))
+    const r = await db.query<any>(`select missing_checkout, is_regularised from attendance_records where employee_id = $1 and work_date = $2`, [EMP.meena, d])
+    expect(r.rows[0].missing_checkout).toBe(true)
+    expect(r.rows[0].is_regularised).toBe(false)
+    await asUser(db, USERS.hr, (q) => q(`select manual_attendance($1, $2::date, '09:05', '18:00', 'corrected')`, [EMP.meena, d]))
+    const r2 = await db.query<any>(`select missing_checkout, is_regularised from attendance_records where employee_id = $1 and work_date = $2`, [EMP.meena, d])
+    expect(r2.rows[0]).toEqual({ missing_checkout: false, is_regularised: true })
+  })
+})
+
 describe('approval engine', () => {
   it('does not ask the same approver twice for one request', async () => {
     // a two-step workflow where both steps resolve to the same user
