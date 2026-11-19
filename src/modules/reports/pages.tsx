@@ -19,10 +19,12 @@ import { Card, CardHeader, Badge } from '@/components/ui/misc'
 import { cn, fmtDate, fmtTime, isoDate, minutes, money, titleCase } from '@/lib/utils'
 
 type Col = { key: string; header: string; kind?: 'date' | 'money' | 'minutes' | 'time' | 'status' | 'number' | 'bool' }
-type Dataset = { view: string; label: string; dateField?: string; statusField?: string; statuses?: string[]; columns: Col[]; perm?: string; summary?: (rows: any[]) => { label: string; value: any; tone?: any }[]; chart?: { by: string; value?: string; label: string } }
+/** dateDefault: 'ytd' (1 Jan → today, the default), 'year' (whole calendar year, for future-dated leave, joiners and exits),
+ *  'none' (no date filter until the user sets one — e.g. the employee register must include everyone who joined in earlier years). */
+type Dataset = { view: string; label: string; dateField?: string; dateDefault?: 'ytd' | 'year' | 'none'; statusField?: string; statuses?: string[]; columns: Col[]; perm?: string; summary?: (rows: any[]) => { label: string; value: any; tone?: any }[]; chart?: { by: string; value?: string; label: string } }
 
 export const DATASETS: Record<string, Dataset> = {
-  employees: { view: 'v_employee_register', label: 'Employee register', dateField: 'date_of_joining', statusField: 'status', statuses: ['onboarding', 'probation', 'active', 'notice', 'exited', 'inactive'],
+  employees: { view: 'v_employee_register', label: 'Employee register', dateField: 'date_of_joining', dateDefault: 'none', statusField: 'status', statuses: ['onboarding', 'probation', 'active', 'notice', 'exited', 'inactive'],
     columns: [{ key: 'employee_code', header: 'ID' }, { key: 'employee_name', header: 'Name' }, { key: 'department_name', header: 'Department' }, { key: 'designation_name', header: 'Designation' }, { key: 'location_name', header: 'Location' },
       { key: 'manager_name', header: 'Manager' }, { key: 'employment_type', header: 'Type' }, { key: 'gender', header: 'Gender' }, { key: 'date_of_joining', header: 'Joined', kind: 'date' }, { key: 'exit_date', header: 'Exit', kind: 'date' }, { key: 'status', header: 'Status', kind: 'status' }],
     summary: (r) => [{ label: 'Employees', value: r.length }, { label: 'Active', value: r.filter((x) => ['active', 'probation', 'notice'].includes(x.status)).length, tone: 'success' }, { label: 'Exited', value: r.filter((x) => x.status === 'exited').length }],
@@ -37,7 +39,7 @@ export const DATASETS: Record<string, Dataset> = {
   late: { view: 'v_attendance_register', label: 'Late arrival report', dateField: 'work_date', columns: [], },
   missing: { view: 'v_attendance_register', label: 'Missing check-out report', dateField: 'work_date', columns: [] },
   overtime: { view: 'v_attendance_register', label: 'Overtime report', dateField: 'work_date', columns: [] },
-  leave: { view: 'v_leave_register', label: 'Leave utilisation', dateField: 'start_date', statusField: 'status', statuses: ['pending', 'approved', 'rejected', 'cancelled'],
+  leave: { view: 'v_leave_register', label: 'Leave utilisation', dateField: 'start_date', dateDefault: 'year', statusField: 'status', statuses: ['pending', 'approved', 'rejected', 'cancelled'],
     columns: [{ key: 'employee_code', header: 'ID' }, { key: 'employee_name', header: 'Name' }, { key: 'department_name', header: 'Department' }, { key: 'leave_type_name', header: 'Leave type' },
       { key: 'start_date', header: 'From', kind: 'date' }, { key: 'end_date', header: 'To', kind: 'date' }, { key: 'days', header: 'Days', kind: 'number' }, { key: 'is_paid', header: 'Paid', kind: 'bool' }, { key: 'status', header: 'Status', kind: 'status' }, { key: 'reason', header: 'Reason' }],
     summary: (r) => [{ label: 'Applications', value: r.length }, { label: 'Approved days', value: r.filter((x) => x.status === 'approved').reduce((a, x) => a + Number(x.days), 0), tone: 'primary' }, { label: 'Unpaid days', value: r.filter((x) => x.status === 'approved' && !x.is_paid).reduce((a, x) => a + Number(x.days), 0), tone: 'danger' }],
@@ -67,8 +69,8 @@ export const DATASETS: Record<string, Dataset> = {
     columns: [{ key: 'check_in_at', header: 'Started', kind: 'date' }, { key: 'employee_code', header: 'ID' }, { key: 'employee_name', header: 'Name' }, { key: 'site_name', header: 'Site' }, { key: 'client_name', header: 'Customer' }, { key: 'purpose', header: 'Purpose' }, { key: 'duration_minutes', header: 'Duration', kind: 'minutes' }, { key: 'outcome', header: 'Outcome' }],
     summary: (r) => [{ label: 'Visits', value: r.length }, { label: 'Time on site', value: minutes(r.reduce((a, x) => a + Number(x.duration_minutes), 0)) }, { label: 'People', value: new Set(r.map((x) => x.employee_id)).size }],
     chart: { by: 'employee_name', label: 'Visits by employee' } },
-  onboarding: { view: 'v_lifecycle_register', label: 'Onboarding report', dateField: 'key_date', columns: [{ key: 'employee_code', header: 'ID' }, { key: 'employee_name', header: 'Name' }, { key: 'key_date', header: 'Joining', kind: 'date' }, { key: 'done_tasks', header: 'Tasks done', kind: 'number' }, { key: 'total_tasks', header: 'Tasks', kind: 'number' }, { key: 'status', header: 'Status', kind: 'status' }] },
-  offboarding: { view: 'v_lifecycle_register', label: 'Offboarding report', dateField: 'key_date', columns: [{ key: 'employee_code', header: 'ID' }, { key: 'employee_name', header: 'Name' }, { key: 'reason', header: 'Separation' }, { key: 'key_date', header: 'Last day', kind: 'date' }, { key: 'done_tasks', header: 'Tasks done', kind: 'number' }, { key: 'total_tasks', header: 'Tasks', kind: 'number' }, { key: 'status', header: 'Status', kind: 'status' }] },
+  onboarding: { view: 'v_lifecycle_register', label: 'Onboarding report', dateField: 'key_date', dateDefault: 'year', columns: [{ key: 'employee_code', header: 'ID' }, { key: 'employee_name', header: 'Name' }, { key: 'key_date', header: 'Joining', kind: 'date' }, { key: 'done_tasks', header: 'Tasks done', kind: 'number' }, { key: 'total_tasks', header: 'Tasks', kind: 'number' }, { key: 'status', header: 'Status', kind: 'status' }] },
+  offboarding: { view: 'v_lifecycle_register', label: 'Offboarding report', dateField: 'key_date', dateDefault: 'year', columns: [{ key: 'employee_code', header: 'ID' }, { key: 'employee_name', header: 'Name' }, { key: 'reason', header: 'Separation' }, { key: 'key_date', header: 'Last day', kind: 'date' }, { key: 'done_tasks', header: 'Tasks done', kind: 'number' }, { key: 'total_tasks', header: 'Tasks', kind: 'number' }, { key: 'status', header: 'Status', kind: 'status' }] },
   departments: { view: 'v_employee_register', label: 'Department distribution', columns: [] },
 }
 // derived reports share their parent's columns
@@ -92,8 +94,10 @@ export function ReportView({ reportKey: rk, columnsOverride, title }: { reportKe
   const key = rk ?? params.report ?? 'employees'
   const ds = DATASETS[key]
   const { can } = useAuth()
-  const [from, setFrom] = useState(isoDate(startOfMonth(new Date(new Date().getFullYear(), 0, 1))))
-  const [to, setTo] = useState(isoDate())
+  const yr = new Date().getFullYear()
+  const dd = ds?.dateDefault ?? 'ytd'
+  const [from, setFrom] = useState(dd === 'none' ? '' : isoDate(startOfMonth(new Date(yr, 0, 1))))
+  const [to, setTo] = useState(dd === 'none' ? '' : dd === 'year' ? isoDate(new Date(yr, 11, 31)) : isoDate())
   const [dept, setDept] = useState(''), [desig, setDesig] = useState(''), [status, setStatus] = useState('')
   const depts = useLookup('departments'), desigs = useLookup('designations')
   const q = useQuery({
@@ -101,7 +105,8 @@ export function ReportView({ reportKey: rk, columnsOverride, title }: { reportKe
     enabled: !!ds && (!ds.perm || can(ds.perm)),
     queryFn: async () => {
       let x: any = db.from(ds.view).select('*').limit(10000)
-      if (ds.dateField) x = x.gte(ds.dateField, from).lte(ds.dateField, ds.dateField.endsWith('_at') ? `${to}T23:59:59` : to)
+      if (ds.dateField && from) x = x.gte(ds.dateField, from)
+      if (ds.dateField && to) x = x.lte(ds.dateField, ds.dateField.endsWith('_at') ? `${to}T23:59:59` : to)
       if (dept) x = x.eq('department_id', dept)
       if (desig) x = x.eq('designation_id', desig)
       if (status && ds.statusField) x = x.eq(ds.statusField, status)
@@ -116,7 +121,7 @@ export function ReportView({ reportKey: rk, columnsOverride, title }: { reportKe
   const chart = ds.chart ? Object.entries(rows.reduce((m: Record<string, number>, r) => { const k = String(r[ds.chart!.by] ?? '—'); m[k] = (m[k] ?? 0) + (ds.chart!.value ? Number(r[ds.chart!.value] ?? 0) : 1); return m }, {})).map(([name, value]) => ({ name: ds.chart!.by === 'status' ? titleCase(name) : name, value })).sort((a, b) => b.value - a.value).slice(0, 15) : []
   const tableCols: Column<any>[] = cols.map((c) => ({ key: c.key, header: c.header, value: (r: any) => (c.kind === 'money' || c.kind === 'number' || c.kind === 'minutes' ? Number(r[c.key] ?? 0) : fmt(c, r[c.key])), cell: (r: any) => (c.kind === 'status' ? <StatusBadge status={r[c.key]} /> : fmt(c, r[c.key])), className: ['money', 'number', 'minutes'].includes(c.kind ?? '') ? 'tnum' : undefined }))
   const exportCols: ExportColumn[] = cols.map((c) => ({ key: c.key, header: c.header, format: (r: any) => fmt(c, r[c.key]) }))
-  const subtitle = `${ds.dateField ? `${fmtDate(from)} – ${fmtDate(to)}` : 'All dates'}${dept ? ` · ${depts.data?.find((d) => d.id === dept)?.name}` : ''}${status ? ` · ${titleCase(status)}` : ''}`
+  const subtitle = `${ds.dateField && (from || to) ? `${from ? fmtDate(from) : 'Any date'} – ${to ? fmtDate(to) : 'any date'}` : 'All dates'}${dept ? ` · ${depts.data?.find((d) => d.id === dept)?.name}` : ''}${status ? ` · ${titleCase(status)}` : ''}`
   return (
     <div className="space-y-5">
       <PageHeader title={title ?? ds.label} description={subtitle} crumbs={[{ label: 'Reports & Analytics', to: '/reports/employees' }]}
