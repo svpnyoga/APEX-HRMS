@@ -51,3 +51,22 @@ describe('full & final settlement', () => {
     expect((await lines(id2)).find((x: any) => x.title === 'Gratuity')).toBeUndefined()
   })
 })
+
+describe('exit completion and clearance dues', () => {
+  it('deducts clearance dues in F&F and refuses to complete the exit before the last working day', async () => {
+    const PRIYA_RAMAN_EMP = '60000000-0000-4000-a000-000000000009' // meena in the demo seed
+    const lwd = (await db.query<any>(`select (current_date + 20)::date d`)).rows[0].d
+    const caseId = await asUser(db, USERS.hr, async (q) => (await q<any>(`select submit_resignation('Moving city', $2::date, 'resignation', $1) id`, [PRIYA_RAMAN_EMP, lwd]))[0].id)
+    await db.query(`select approval_hook_resignation($1, 'approved', null)`, [caseId])
+    await db.query(`update offboarding_cases set status = 'in_clearance' where id = $1`, [caseId])
+    await db.query(`update clearance_records set status = 'cleared', dues_amount = case when department = 'it' then 1500 else 0 end, remarks = case when department = 'it' then 'Charger' end where case_id = $1`, [caseId])
+    await db.query(`update offboarding_tasks set status = 'done' where case_id = $1`, [caseId])
+    await db.query(`update employee_assets set status = 'returned' where employee_id = $1`, [PRIYA_RAMAN_EMP])
+    const fnf = await asUser(db, USERS.finance, async (q) => (await q<any>(`select compute_fnf($1, $2::date, false, $3) id`, [PRIYA_RAMAN_EMP, lwd, caseId]))[0].id)
+    const dues = (await db.query<any>(`select amount::float a, basis from fnf_lines where settlement_id = $1 and title like 'Clearance dues%'`, [fnf])).rows
+    expect(dues).toEqual([{ a: 1500, basis: 'Charger' }])
+    await asUser(db, USERS.hr, async (q) => {
+      await expect(q(`select complete_offboarding($1)`, [caseId])).rejects.toThrow(/on or after the last working day/)
+    })
+  })
+})

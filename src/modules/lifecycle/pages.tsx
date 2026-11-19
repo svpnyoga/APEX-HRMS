@@ -218,7 +218,7 @@ function OffboardingCase({ c, focus, onClose }: { c: any; focus?: string; onClos
       footer={c.status === 'in_clearance' && can('offboarding.manage') && <Button variant="danger" loading={complete.isPending} onClick={async () => { if ((await confirm({ title: 'Complete exit?', description: 'The employee is marked exited and their login is deactivated. History is kept.', danger: true })).ok) complete.mutate() }}><LogOut /> Complete exit</Button>}>
       {c.status === 'pending_approval' && <MyRequestStatus entityType="resignation" entityId={c.id} />}
       {dues && (
-        <Dialog open onOpenChange={(o) => !o && setDues(null)} title={`Record dues · ${dues.dept}`} size="sm"
+        <Dialog open onOpenChange={(o) => !o && setDues(null)} title={`Record dues · ${dues.dept}`} description="Recovered from the employee in the full & final settlement." size="sm"
           footer={<><Button variant="secondary" onClick={() => setDues(null)}>Cancel</Button>
             <Button disabled={!(Number(dues.amount) > 0) || !dues.note.trim()} loading={update.isPending}
               onClick={() => update.mutate({ id: dues.id, status: 'dues_pending', dues: Number(dues.amount), remarks: dues.note.trim() }, { onSuccess: () => setDues(null) })}>Save dues</Button></>}>
