@@ -125,7 +125,7 @@ function RequireEmployee({ children }: { children: ReactNode }) {
   const { access } = useAuth()
   if (!access) return <LoadingRows />
   if (!employeeId) return <EmptyState icon={UserX} title="Your login is not linked to an employee record"
-    description="This page shows your own records (leave, claims, appraisals, payslips…). Link your login to an employee in Administration › User management, or open the employee's profile to see their details." />
+    description="This page shows your own records (leave, claims, appraisals, payslips…), and this account is not an employee. To see someone's records, open their profile from the Employee directory." />
   return <>{children}</>
 }
 const mine = (el: ReactNode) => <RequireEmployee>{el}</RequireEmployee>
