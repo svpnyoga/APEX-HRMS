@@ -45,3 +45,17 @@ describe('policy acknowledgement', () => {
     expect(r[0].acknowledged_at).toBeTruthy()
   })
 })
+
+describe('anonymous feedback', () => {
+  const ins = (ret: boolean) => `insert into employee_feedback (organisation_id, feedback_type, subject, message, is_anonymous, employee_id)
+    values (current_org_id(), 'suggestion', 'Canteen', 'More tea breaks', true, null)${ret ? ' returning id' : ''}`
+  it('reading the row back after saving is refused (so the app must not ask for it)', async () => {
+    await asUser(db, USERS.employee, async (q) => { await expect(q(ins(true))).rejects.toThrow(/row-level security/i) })
+  })
+  it('saving without reading back works, and the sender is not stored', async () => {
+    await asUser(db, USERS.employee, (q) => q(ins(false)))
+    const r = (await db.query<any>(`select employee_id from employee_feedback where subject = 'Canteen'`)).rows
+    expect(r).toHaveLength(1)
+    expect(r[0].employee_id).toBeNull()
+  })
+})

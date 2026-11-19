@@ -186,7 +186,8 @@ export function FeedbackSuggestionsPage() {
   const [open, setOpen] = useState(false); const [respond, setRespond] = useState<any | null>(null)
   const [v, setV] = useState({ feedback_type: 'suggestion', subject: '', message: '', is_anonymous: false })
   const [resp, setResp] = useState({ status: 'in_review', response: '' })
-  const send = useAction(() => unwrap(db.from('employee_feedback').insert({ ...v, organisation_id: orgId, employee_id: v.is_anonymous ? null : employeeId }).select('id')), { success: 'Thank you — your feedback was submitted', invalidate: [['engagement', 'feedback']], onSuccess: () => { setOpen(false); setV({ feedback_type: 'suggestion', subject: '', message: '', is_anonymous: false }) } })
+  // no read-back after insert: an anonymous row is (rightly) not visible to its sender
+  const send = useAction(() => unwrap(db.from('employee_feedback').insert({ ...v, organisation_id: orgId, employee_id: v.is_anonymous ? null : employeeId })), { success: 'Thank you — your feedback was submitted', invalidate: [['engagement', 'feedback']], onSuccess: () => { setOpen(false); setV({ feedback_type: 'suggestion', subject: '', message: '', is_anonymous: false }) } })
   const answer = useAction(() => unwrap(db.from('employee_feedback').update({ status: resp.status, response: resp.response, responded_at: new Date().toISOString() }).eq('id', respond.id).select('id')), { success: 'Response saved', invalidate: [['engagement', 'feedback']], onSuccess: () => setRespond(null) })
   return (
     <div>
