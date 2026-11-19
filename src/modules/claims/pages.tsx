@@ -66,18 +66,24 @@ export function ClaimForm({ onDone, existing }: { onDone?: (id: string) => void;
   const pols = useLookup<any>('expense_policies', 'category_id, per_claim_limit, monthly_limit, designation_id', 'category_id', (q) => q.eq('is_active', true))
   const [v, setV] = useState<any>({ category_id: '', title: '', description: '', expense_date: isoDate(), amount: '', project_reference: '', justification: '', ...existing })
   const [files, setFiles] = useState<File[]>([])
+  // Once the draft row exists, retries (e.g. after "receipt required") must update it, not insert another draft.
+  const [savedId, setSavedId] = useState<string | undefined>(existing?.id)
   const cat = (cats.data ?? []).find((c) => c.id === v.category_id)
   const pol = (pols.data ?? []).find((p) => p.category_id === v.category_id)
   const over = pol?.per_claim_limit && Number(v.amount) > Number(pol.per_claim_limit)
   const save = useAction(async (submit: boolean) => {
     const payload = { category_id: v.category_id, title: v.title, description: v.description || null, expense_date: v.expense_date, amount: Number(v.amount), project_reference: v.project_reference || null, justification: v.justification || null }
-    let id = existing?.id
+    let id: string = savedId ?? ''
     if (id) await unwrap(db.from('expense_claims').update(payload).eq('id', id).select('id'))
-    else id = (await unwrap<any[]>(db.from('expense_claims').insert({ ...payload, organisation_id: orgId, employee_id: employeeId, status: 'draft' }).select('id')))[0].id
+    else {
+      id = (await unwrap<any[]>(db.from('expense_claims').insert({ ...payload, organisation_id: orgId, employee_id: employeeId, status: 'draft' }).select('id')))[0].id
+      setSavedId(id)
+    }
     for (const f of files) {
       const path = await uploadFile('claim-receipts', orgId, employeeId, f)
       await unwrap(db.from('claim_attachments').insert({ claim_id: id, storage_path: path, file_name: f.name, mime_type: f.type, size_bytes: f.size, sha256: await sha256Hex(f) }).select('id'))
     }
+    if (files.length) setFiles([]) // uploaded; a retry must not attach them twice
     if (submit) {
       const r: any = await rpc('submit_claim', { p_claim: id })
       if (r.possible_duplicate) toast.warning('Submitted — flagged as a possible duplicate for your approver to check')
