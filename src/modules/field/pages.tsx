@@ -19,6 +19,8 @@ import { SettingsForm } from '@/modules/admin/settings'
 import { ConsentDialog } from '@/modules/self/consent'
 import { FieldMap, type MapPoint } from './map'
 
+/** Start of a calendar day in the user's own time zone, as an ISO timestamp (not UTC midnight). */
+const dayStart = (d: string, plusDays = 0) => { const x = new Date(`${d}T00:00:00`); x.setDate(x.getDate() + plusDays); return x.toISOString() }
 const useSites = () => useQuery({ queryKey: ['field', 'sites'], queryFn: () => unwrap<any[]>(db.from('work_sites').select('*').eq('is_active', true)) })
 function useLatest() {
   return useQuery({
@@ -40,7 +42,7 @@ export function FieldDashboard() {
   const latest = useLatest(); const sites = useSites()
   const today = isoDate()
   const events = useQuery({ queryKey: ['field', 'events', today], queryFn: () => unwrap<any[]>(db.from('attendance_events').select('employee_id, site_id, within_geofence, is_flagged, method').eq('work_date', today)) })
-  const visits = useQuery({ queryKey: ['field', 'visits-today'], queryFn: () => unwrap<any[]>(db.from('field_visits').select('id, check_out_at').gte('check_in_at', `${today}T00:00:00`)) })
+  const visits = useQuery({ queryKey: ['field', 'visits-today'], queryFn: () => unwrap<any[]>(db.from('field_visits').select('id, check_out_at').gte('check_in_at', dayStart(today))) })
   const ev = events.data ?? []
   return (
     <div className="space-y-5">
@@ -230,7 +232,7 @@ export function LocationHistoryPage() {
   const { can } = useAuth()
   const [emp, setEmp] = useState<string | null>(employeeId)
   const [date, setDate] = useState(isoDate())
-  const q = useQuery({ queryKey: ['field', 'history', emp, date], enabled: !!emp, queryFn: () => unwrap<any[]>(db.from('field_location_records').select('*').eq('employee_id', emp).gte('recorded_at', `${date}T00:00:00`).lte('recorded_at', `${date}T23:59:59`).order('recorded_at')) })
+  const q = useQuery({ queryKey: ['field', 'history', emp, date], enabled: !!emp, queryFn: () => unwrap<any[]>(db.from('field_location_records').select('*').eq('employee_id', emp).gte('recorded_at', dayStart(date)).lt('recorded_at', dayStart(date, 1)).order('recorded_at')) })
   const path = (q.data ?? []).map((r) => [r.latitude, r.longitude] as [number, number])
   return (
     <div className="space-y-5">

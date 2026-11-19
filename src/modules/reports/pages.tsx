@@ -105,8 +105,11 @@ export function ReportView({ reportKey: rk, columnsOverride, title }: { reportKe
     enabled: !!ds && (!ds.perm || can(ds.perm)),
     queryFn: async () => {
       let x: any = db.from(ds.view).select('*').limit(10000)
-      if (ds.dateField && from) x = x.gte(ds.dateField, from)
-      if (ds.dateField && to) x = x.lte(ds.dateField, ds.dateField.endsWith('_at') ? `${to}T23:59:59` : to)
+      // timestamp columns: use the start/end of the day in the user's time zone, not UTC
+      const local = (d: string, plus = 0) => { const t = new Date(`${d}T00:00:00`); t.setDate(t.getDate() + plus); return t.toISOString() }
+      const stamp = ds.dateField?.endsWith('_at')
+      if (ds.dateField && from) x = x.gte(ds.dateField, stamp ? local(from) : from)
+      if (ds.dateField && to) x = stamp ? x.lt(ds.dateField, local(to, 1)) : x.lte(ds.dateField, to)
       if (dept) x = x.eq('department_id', dept)
       if (desig) x = x.eq('designation_id', desig)
       if (status && ds.statusField) x = x.eq(ds.statusField, status)
