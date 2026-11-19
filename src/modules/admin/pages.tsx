@@ -2,8 +2,9 @@ import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Download, MailPlus, Plus, Save, ShieldCheck, Trash2, UserCog, Ban, Database, Send } from 'lucide-react'
 import { toast } from 'sonner'
-import { db, unwrap } from '@/lib/api'
+import { db, rpc, unwrap } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
+import { adminUsers } from '@/lib/admin-users'
 import { useAuth, useMe } from '@/app/auth'
 import { useAction, useLookup } from '@/hooks/data'
 import { exportExcel, download } from '@/lib/export'
@@ -21,15 +22,9 @@ import { cn, errorMessage, fmtDate, fmtDateTime, titleCase, ago } from '@/lib/ut
 import { SettingsForm } from './settings'
 import { ENTITY_LABEL } from '@/modules/approvals/Inbox'
 
-async function adminUsers(body: Record<string, unknown>) {
-  const { data, error } = await supabase.functions.invoke('admin-users', { body })
-  if (error) {
-    let msg = error.message
-    try { msg = (await (error as any).context?.json())?.error ?? msg } catch { /* ignore */ }
-    throw new Error(`${msg}. The admin-users edge function must be deployed (see docs/DEPLOYMENT.md).`)
-  }
-  return data
-}
+
+/** PostgREST returns the linked employee as an object (one-to-one) — older code expected an array. */
+const linkedEmployee = (u: any) => (Array.isArray(u?.employees) ? u.employees[0] : u?.employees) ?? null
 
 /** The People tab of User management (see ./access.tsx for the page). */
 export function UsersListPage() {
@@ -49,7 +44,7 @@ export function UsersListPage() {
       <DataTable rows={users.data} loading={users.isLoading} error={users.error} exportName="Users" onRowClick={setEdit} columns={[
         { key: 'full_name', header: 'User', cell: (r) => <div><div className="font-medium">{r.full_name}</div><div className="text-xs text-muted">{r.email}</div></div>, value: (r) => `${r.full_name} ${r.email}` },
         { key: 'roles', header: 'Roles', value: (r) => r.user_roles?.map((x: any) => x.roles?.name).join(', '), cell: (r) => <div className="flex flex-wrap gap-1">{r.user_roles?.map((x: any) => <Badge key={x.role_id} tone="primary">{x.roles?.name}</Badge>)}</div> },
-        { key: 'employee', header: 'Employee', value: (r) => (r.employees?.[0] ? `${r.employees[0].first_name} ${r.employees[0].last_name} (${r.employees[0].employee_code})` : 'Not linked') },
+        { key: 'employee', header: 'Employee', value: (r) => { const e = linkedEmployee(r); return e ? `${e.first_name} ${e.last_name} (${e.employee_code})` : 'Not linked' } },
         { key: 'is_active', header: 'Status', cell: (r) => <StatusBadge status={r.is_active ? 'active' : 'inactive'} /> },
         { key: '_a', header: '', sortable: false, exportable: false, className: 'text-right', cell: (r) => (
           <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
@@ -86,13 +81,20 @@ function UserRolesDrawer({ user, roles, onClose }: { user: any; roles: any[]; on
   const isSuper = !!access?.roles.includes('super_admin')
   const current = new Set<string>((user.user_roles ?? []).map((r: any) => r.role_id))
   const [sel, setSel] = useState<Set<string>>(current)
+  const linked: string | null = linkedEmployee(user)?.id ?? null
+  const [emp, setEmp] = useState<string | null>(linked)
   const save = useAction(async () => {
+    if (emp !== linked) await rpc('link_user_employee', { p_user: user.id, p_employee: emp })
     const add = [...sel].filter((r) => !current.has(r)), remove = [...current].filter((r) => !sel.has(r))
     if (add.length) await unwrap(db.from('user_roles').insert(add.map((role_id) => ({ user_id: user.id, role_id }))).select('user_id'))
     for (const r of remove) await unwrap(db.from('user_roles').delete().eq('user_id', user.id).eq('role_id', r).select('user_id'))
-  }, { success: 'Roles updated', invalidate: [['admin', 'users']], onSuccess: onClose })
+  }, { success: 'User updated', invalidate: [['admin', 'users'], ['directory'], ['access']], onSuccess: onClose })
   return (
-    <Drawer open onOpenChange={(o) => !o && onClose()} title={user.full_name} description={user.email} footer={<Button loading={save.isPending} onClick={() => save.mutate()}><Save /> Save roles</Button>}>
+    <Drawer open onOpenChange={(o) => !o && onClose()} title={user.full_name} description={user.email} footer={<Button loading={save.isPending} onClick={() => save.mutate()}><Save /> Save</Button>}>
+      <Field label="Linked employee" hint="Links this login to an employee record, so the person gets their own leave, claims, payslips and appraisals." className="mb-5">
+        <EmployeePicker value={emp} onChange={setEmp} allowClear filter={(e: any) => !e.user_id || e.id === linked} />
+      </Field>
+      <h4 className="mb-2 text-sm font-semibold">Roles</h4>
       <div className="space-y-2">{roles.map((r) => (
         <label key={r.id} className="flex items-center justify-between rounded-md border border-line px-3 py-2.5 text-sm"><span><span className="font-medium">{r.name}</span><span className="block text-xs text-muted">{r.code}</span></span>
           <Switch checked={sel.has(r.id)} disabled={r.code === 'super_admin' && !isSuper} onCheckedChange={(on) => { const s = new Set(sel); on ? s.add(r.id) : s.delete(r.id); setSel(s) }} /></label>

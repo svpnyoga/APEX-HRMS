@@ -3,7 +3,7 @@ import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { db, unwrap } from '@/lib/api'
-import { supabase } from '@/lib/supabase'
+import { adminUsers } from '@/lib/admin-users'
 import { useMe } from '@/app/auth'
 import { useAction } from '@/hooks/data'
 import { LookupSelect } from '@/components/crud/CrudPage'
@@ -65,9 +65,12 @@ export function EmployeeForm({ open, onOpenChange, employee, onSaved }: { open: 
       await unwrap(db.from('employees').insert({ ...payload, id, organisation_id: orgId }))
     }
     if (invite) {
-      const { error } = await supabase.functions.invoke('admin-users', { body: { action: 'invite', employee_id: id, email: v.official_email, full_name: `${v.first_name} ${v.last_name}`.trim(), roles: [v.is_field_employee ? 'field_employee' : 'employee'] } })
-      if (error) toast.error(`Employee saved, but the invite failed: ${error.message}. Deploy the admin-users edge function (see docs).`)
-      else toast.success('Login invite sent')
+      try {
+        await adminUsers({ action: 'invite', employee_id: id, email: v.official_email, full_name: `${v.first_name} ${v.last_name}`.trim(), roles: [v.is_field_employee ? 'field_employee' : 'employee'] })
+        toast.success('Login invite sent')
+      } catch (err) {
+        toast.error(`Employee saved, but the invite was not sent: ${(err as Error).message}`, { duration: 15000 })
+      }
     }
     return id as string
   }, { success: employee ? 'Employee updated' : 'Employee created', invalidate: [['directory'], ['employee'], ['crud', 'employees']], onSuccess: (id) => { onOpenChange(false); onSaved?.(id) } })

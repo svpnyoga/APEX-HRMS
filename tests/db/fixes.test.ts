@@ -134,3 +134,21 @@ describe('HR fallback approvers', () => {
     for (const row of r.rows) expect(row.n).toBe(1)
   })
 })
+
+describe('link an existing login to an employee', () => {
+  it('admin links, re-links and unlinks; employee already linked elsewhere is refused', async () => {
+    const free = (await db.query<any>(`select id from employees where user_id is null and deleted_at is null limit 2`)).rows
+    await asUser(db, USERS.admin, async (q) => {
+      await q(`select link_user_employee($1, $2)`, [USERS.md, free[0].id])
+      expect((await q<any>(`select user_id from employees where id = $1`, [free[0].id]))[0].user_id).toBe(USERS.md)
+      await q(`select link_user_employee($1, $2)`, [USERS.md, free[1].id]) // move the link
+      expect((await q<any>(`select count(*)::int n from employees where user_id = $1`, [USERS.md]))[0].n).toBe(1)
+      await expect(q(`select link_user_employee($1, $2)`, [USERS.hr, free[1].id])).rejects.toThrow(/already linked/)
+      await q(`select link_user_employee($1, null)`, [USERS.md])
+      expect((await q<any>(`select count(*)::int n from employees where user_id = $1`, [USERS.md]))[0].n).toBe(0)
+    })
+    await asUser(db, USERS.employee, async (q) => {
+      await expect(q(`select link_user_employee($1, $2)`, [USERS.md, free[0].id])).rejects.toThrow(/Not authorised/)
+    })
+  })
+})
