@@ -119,3 +119,18 @@ describe('payroll fixes', () => {
     expect(r.rows[0].summary).toMatch(/net ₹[\d,]+\.\d\d/)
   })
 })
+
+describe('HR fallback approvers', () => {
+  it('creates one task per person even if they hold several HR roles', async () => {
+    // admin user also gets hr_admin
+    await db.query(`insert into user_roles (user_id, role_id) select $1, id from roles where code = 'hr_admin' on conflict do nothing`, [USERS.admin])
+    const wf = (await db.query<any>(`insert into approval_workflows (organisation_id, entity_type, name, is_active)
+        values ($1, 'overtime', 'Fallback', true) on conflict (organisation_id, entity_type) do update set is_active = true returning id`, [ORG])).rows[0].id
+    await db.query(`delete from approval_workflow_steps where workflow_id = $1`, [wf])
+    await db.query(`insert into approval_workflow_steps (workflow_id, step_order, name, approver_type, user_id, mode) values ($1, 1, 'Nobody', 'user', null, 'any')`, [wf])
+    const req = (await db.query<any>(`select submit_for_approval('overtime', gen_random_uuid(), $1, 'Fallback test', null, null) id`, [EMP.employee])).rows[0].id
+    const r = await db.query<any>(`select approver_user_id, count(*)::int n from approval_tasks where request_id = $1 group by 1`, [req])
+    expect(r.rows.length).toBeGreaterThan(0)
+    for (const row of r.rows) expect(row.n).toBe(1)
+  })
+})

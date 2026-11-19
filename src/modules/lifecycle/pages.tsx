@@ -30,6 +30,8 @@ const FOCUS: Record<string, { title: string; categories: string[] }> = {
   interview: { title: 'Exit interview', categories: ['interview'] },
 }
 
+const ROLE_LABEL: Record<string, string> = { hr: 'HR', it: 'IT', admin: 'Admin', finance: 'Finance', manager: 'Manager', employee: 'Employee' }
+
 function TaskList({ kind, caseId, focus }: { kind: 'onboarding' | 'offboarding'; caseId: string; focus?: string }) {
   const table = kind === 'onboarding' ? 'onboarding_tasks' : 'offboarding_tasks'
   const q = useQuery({ queryKey: [kind, 'tasks', caseId], queryFn: () => unwrap<any[]>(db.from(table).select('*').eq('case_id', caseId).order('sort_order')) })
@@ -45,7 +47,7 @@ function TaskList({ kind, caseId, focus }: { kind: 'onboarding' | 'offboarding';
           </button>
           <div className="min-w-0 flex-1">
             <div className={cn('text-sm', t.status !== 'pending' && 'text-muted line-through')}>{t.title}{!t.is_mandatory && <span className="ml-1 text-xs text-subtle">(optional)</span>}</div>
-            <div className="text-xs text-subtle">{titleCase(t.owner_role)} · {titleCase(t.category)}{t.due_date && ` · due ${fmtDate(t.due_date, 'dd MMM')}`}</div>
+            <div className="text-xs text-subtle">{ROLE_LABEL[t.owner_role] ?? titleCase(t.owner_role)} · {titleCase(t.category)}{t.due_date && ` · due ${fmtDate(t.due_date, 'dd MMM')}`}</div>
           </div>
           {t.status === 'pending' && !t.is_mandatory && <Button size="sm" variant="ghost" onClick={() => set.mutate({ id: t.id, status: 'skipped' })}>Skip</Button>}
           {t.status === 'pending' && t.due_date && t.due_date < isoDate() && <Badge tone="danger">Overdue</Badge>}
@@ -68,7 +70,7 @@ export function OnboardingPage() {
     <div className="space-y-5">
       <PageHeader title={focus ? FOCUS[focus]?.title ?? 'Onboarding' : 'Onboarding progress'} description="Each new joiner gets a checklist from your onboarding template. HR signs off completion through the approval workflow."
         actions={<Link to="/onboarding/new"><Button><UserPlus /> Register new employee</Button></Link>} />
-      <StatStrip items={[{ label: 'In progress', value: rows.filter((r) => r.status === 'in_progress').length, tone: 'primary' }, { label: 'Awaiting sign-off', value: rows.filter((r) => r.status === 'pending_approval').length, tone: 'warning' },
+      <StatStrip items={[{ label: 'In progress', value: rows.filter((r) => r.status === 'in_progress').length, tone: 'primary' }, { label: 'Awaiting sign-off', to: '/offboarding/approvals', value: rows.filter((r) => r.status === 'pending_approval').length, tone: 'warning' },
         { label: 'Completed', value: rows.filter((r) => r.status === 'completed').length, tone: 'success' }, { label: 'Joining in next 14 days', value: rows.filter((r) => r.key_date >= isoDate() && r.key_date <= isoDate(new Date(Date.now() + 14 * 864e5))).length }]} />
       <DataTable rows={rows} loading={cases.isLoading} error={cases.error} onRowClick={setOpen} exportName="Onboarding" columns={[
         { key: 'employee_name', header: 'Employee', cell: (r) => <EmployeeCell name={r.employee_name} code={r.employee_code} /> }, { key: 'key_date', header: 'Joining', cell: (r) => fmtDate(r.key_date) },
@@ -180,11 +182,12 @@ export function OffboardingPage() {
 }
 
 export function ResignDialog({ forOthers, selfId, onClose }: { forOthers?: boolean; selfId: string; onClose: () => void }) {
-  const [emp, setEmp] = useState<string | null>(selfId)
+  // HR recording someone else's exit must pick the employee; never default to the HR user themself
+  const [emp, setEmp] = useState<string | null>(forOthers ? null : selfId)
   const [type, setType] = useState('resignation'); const [lwd, setLwd] = useState(isoDate(new Date(Date.now() + 30 * 864e5))); const [reason, setReason] = useState('')
   const submit = useAction(() => rpc('submit_resignation', { p_reason: reason, p_requested_lwd: lwd, p_type: type, p_employee: emp }), { success: 'Submitted for approval', invalidate: [['offboarding']], onSuccess: onClose })
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()} title={forOthers ? 'Record separation' : 'Submit resignation'} description="Your notice period is shown on your profile. HR may adjust the last working day on approval."
+    <Dialog open onOpenChange={(o) => !o && onClose()} title={forOthers ? 'Record separation' : 'Submit resignation'} description={forOthers ? 'Choose the employee who is leaving. The approver can adjust the last working day.' : 'Your notice period is shown on your profile. HR may adjust the last working day on approval.'}
       footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button variant="danger" loading={submit.isPending} disabled={!reason.trim() || !emp} onClick={() => submit.mutate()}>Submit</Button></>}>
       <div className="grid gap-4 sm:grid-cols-2">
         {forOthers && <Field label="Employee" required className="sm:col-span-2"><EmployeePicker value={emp} onChange={setEmp} /></Field>}
@@ -248,7 +251,7 @@ function OffboardingCase({ c, focus, onClose }: { c: any; focus?: string; onClos
   )
 }
 
-export const ResignationApprovalsPage = () => <ApprovalsInbox entityTypes={['resignation', 'onboarding']} title="Resignation approvals" description="Resignations and onboarding sign-offs waiting for your decision." />
+export const ResignationApprovalsPage = () => <ApprovalsInbox entityTypes={['resignation', 'onboarding']} title="Resignation & onboarding approvals" description="Resignations and onboarding sign-offs waiting for your decision." />
 
 export function ExitHistoryPage() {
   const q = useQuery({ queryKey: ['offboarding', 'history'], queryFn: () => unwrap<any[]>(db.from('offboarding_cases').select('*, employees(first_name, last_name, employee_code, date_of_joining), exit_interviews(primary_reason, would_rejoin)').eq('status', 'completed').order('exit_completed_at', { ascending: false })) })
