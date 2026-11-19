@@ -373,7 +373,10 @@ export function AuditLogsPage() {
 const BACKUP_TABLES = ['organisations', 'departments', 'designations', 'locations', 'employees', 'employee_contacts', 'employee_employment_history', 'shifts', 'holidays', 'work_sites',
   'attendance_records', 'leave_types', 'leave_policies', 'leave_balances', 'leave_transactions', 'leave_applications', 'salary_components', 'salary_structures', 'employee_salary_assignments',
   'payroll_runs', 'payroll_entries', 'payroll_entry_lines', 'payslips', 'claim_categories', 'expense_claims', 'reimbursements', 'appraisal_cycles', 'performance_goals', 'appraisal_reviews',
-  'announcements', 'courses', 'course_enrolments', 'onboarding_cases', 'offboarding_cases', 'approval_requests', 'approval_tasks']
+  'announcements', 'courses', 'course_enrolments', 'onboarding_cases', 'offboarding_cases', 'approval_requests', 'approval_tasks',
+  'employee_bank_details', 'employee_documents', 'attendance_events', 'field_visits', 'fnf_settlements', 'fnf_lines', 'claim_attachments',
+  'leave_policies', 'company_settings', 'approval_workflows', 'approval_workflow_steps', 'roles', 'role_permissions', 'user_roles', 'user_profiles']
+const PAGE = 1000   // Supabase returns at most 1,000 rows per request — page through so nothing is cut off
 
 export function BackupPage() {
   const [busy, setBusy] = useState(false)
@@ -384,9 +387,15 @@ export function BackupPage() {
       const out: Record<string, any[]> = {}
       for (const t of BACKUP_TABLES) {
         setProgress(`Exporting ${t}…`)
-        const { data, error } = await db.from(t).select('*').limit(50000)
-        if (error) throw new Error(`${t}: ${error.message}`)
-        out[t] = data ?? []
+        const rows: any[] = []
+        for (let from = 0; ; from += PAGE) {
+          const { data, error } = await db.from(t).select('*').range(from, from + PAGE - 1)
+          if (error) throw new Error(`${t}: ${error.message}`)
+          rows.push(...(data ?? []))
+          setProgress(`Exporting ${t}… ${rows.length} rows`)
+          if (!data || data.length < PAGE) break
+        }
+        out[t] = rows
       }
       const stamp = new Date().toISOString().slice(0, 10)
       if (format === 'json') download(new Blob([JSON.stringify({ exported_at: new Date().toISOString(), tables: out }, null, 1)], { type: 'application/json' }), `hrms-export-${stamp}.json`)
