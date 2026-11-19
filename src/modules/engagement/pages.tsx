@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Award, CheckCheck, Megaphone, Plus, Send, ThumbsUp, Users, BarChart2, CalendarDays, MapPin } from 'lucide-react'
 import { db, rpc, unwrap } from '@/lib/api'
@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
 import { Field, Input, Select, Textarea } from '@/components/ui/input'
 import { Avatar, Badge, Card, CardHeader, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/misc'
-import { ago, cn, fmtDate, fmtDateTime, titleCase } from '@/lib/utils'
+import { ago, cn, fmtDate, fmtDateTime, isoDate, titleCase } from '@/lib/utils'
 import { useNotifications } from '@/components/layout/Topbar'
 
 type Category = 'announcement' | 'news' | 'communication' | 'policy'
@@ -42,6 +42,7 @@ const annCfg = (category: Category): CrudConfig => ({
 })
 
 function Feed({ category }: { category: Category }) {
+  const { employeeId } = useMe()
   const q = useQuery({ queryKey: ['engagement', 'feed', category], queryFn: () => unwrap<any[]>(db.from('my_announcements').select('*').eq('category', category).order('publish_at', { ascending: false })) })
   const mark = useAction(({ id, ack }: { id: string; ack: boolean }) => rpc('mark_announcement', { p_announcement: id, p_acknowledge: ack }), { invalidate: [['engagement']] })
   return (
@@ -49,7 +50,7 @@ function Feed({ category }: { category: Category }) {
       {(items) => (
         <div className="space-y-3">
           {items.map((a) => (
-            <Card key={a.id} className={cn('p-5', !a.read_at && 'border-l-4 border-l-primary')} onMouseEnter={() => !a.read_at && mark.mutate({ id: a.id, ack: false })}>
+            <SeenCard key={a.id} unread={!!employeeId && !a.read_at} onSeen={() => mark.mutate({ id: a.id, ack: false })} className={cn('p-5', !a.read_at && 'border-l-4 border-l-primary')}>
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="font-semibold">{a.title}</h3>
                 {a.priority !== 'normal' && <Badge tone={a.priority === 'urgent' ? 'danger' : 'warning'}>{titleCase(a.priority)}</Badge>}
@@ -58,12 +59,12 @@ function Feed({ category }: { category: Category }) {
               </div>
               <p className="mt-1 text-xs text-muted">{fmtDateTime(a.publish_at)}{a.audience !== 'all' && ` · ${titleCase(a.audience)} audience`}</p>
               <p className="mt-3 whitespace-pre-line text-sm leading-relaxed">{a.body}</p>
-              {a.requires_acknowledgement && (
+              {a.requires_acknowledgement && !!employeeId && (
                 <div className="mt-4">{a.acknowledged_at
                   ? <span className="inline-flex items-center gap-1.5 text-sm text-success"><CheckCheck className="h-4 w-4" />Acknowledged {fmtDate(a.acknowledged_at)}</span>
                   : <Button size="sm" onClick={() => mark.mutate({ id: a.id, ack: true })}><CheckCheck /> I have read and acknowledge</Button>}</div>
               )}
-            </Card>
+            </SeenCard>
           ))}
         </div>
       )}
@@ -71,9 +72,27 @@ function Feed({ category }: { category: Category }) {
   )
 }
 
+/** Marks a post read once at least half of it has been on screen for a second. */
+function SeenCard({ unread, onSeen, className, children }: { unread: boolean; onSeen: () => void; className?: string; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const fired = useRef(false)
+  useEffect(() => {
+    if (!unread || !ref.current || typeof IntersectionObserver === 'undefined') return
+    let t: ReturnType<typeof setTimeout> | undefined
+    const io = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting && !fired.current) t = setTimeout(() => { fired.current = true; onSeen(); io.disconnect() }, 1000)
+      else if (t) clearTimeout(t)
+    }, { threshold: 0.5 })
+    io.observe(ref.current)
+    return () => { io.disconnect(); if (t) clearTimeout(t) }
+  }, [unread]) // eslint-disable-line
+  return <div ref={ref}><Card className={className}>{children}</Card></div>
+}
+
 function Manage({ category }: { category: Category }) {
   const q = useQuery({ queryKey: ['crud', 'announcements', category], queryFn: () => unwrap<any[]>(db.from('announcements').select('*, announcement_recipients(read_at, acknowledged_at)').eq('category', category).order('publish_at', { ascending: false })) })
-  const total = useQuery({ queryKey: ['engagement', 'headcount'], queryFn: async () => (await db.from('employee_directory').select('id', { count: 'exact', head: true }).neq('status', 'exited')).count ?? 0 })
+  const people = useQuery({ queryKey: ['engagement', 'audience'], queryFn: () => unwrap<any[]>(db.from('employee_directory').select('id, department_id, location_id').not('status', 'in', '(exited,inactive)')) })
+  const audienceSize = (r: any) => { const p = people.data; if (!p) return '—'; return r.audience === 'department' ? p.filter((e) => e.department_id === r.department_id).length : r.audience === 'location' ? p.filter((e) => e.location_id === r.location_id).length : p.length }
   const [edit, setEdit] = useState<any | null | undefined>(undefined)
   const publish = useAction((id: string) => rpc<number>('publish_announcement', { p_id: id }), { success: 'Published and audience notified', invalidate: [['crud', 'announcements'], ['engagement']] })
   const cfg = annCfg(category)
@@ -83,8 +102,8 @@ function Manage({ category }: { category: Category }) {
         toolbar={<Button size="sm" className="ml-auto" onClick={() => setEdit(null)}><Plus /> New post</Button>} columns={[
           { key: 'title', header: 'Title', cell: (r) => <div><div className="font-medium">{r.title}</div><div className="text-xs text-muted">{titleCase(r.audience)} · {titleCase(r.priority)}</div></div> },
           { key: 'publish_at', header: 'Publish', cell: (r) => <span className={new Date(r.publish_at) > new Date() ? 'text-info' : ''}>{fmtDateTime(r.publish_at)}{new Date(r.publish_at) > new Date() && ' (scheduled)'}</span> },
-          { key: 'reads', header: 'Read', value: (r) => r.announcement_recipients?.filter((x: any) => x.read_at).length ?? 0, cell: (r) => <span className="tnum">{r.announcement_recipients?.filter((x: any) => x.read_at).length ?? 0} / {total.data ?? '—'}</span> },
-          { key: 'acks', header: 'Acknowledged', value: (r) => (r.requires_acknowledgement ? r.announcement_recipients?.filter((x: any) => x.acknowledged_at).length : null), cell: (r) => (r.requires_acknowledgement ? <span className="tnum">{r.announcement_recipients?.filter((x: any) => x.acknowledged_at).length ?? 0} / {total.data ?? '—'}</span> : '—') },
+          { key: 'reads', header: 'Read', value: (r) => r.announcement_recipients?.filter((x: any) => x.read_at).length ?? 0, cell: (r) => <span className="tnum">{r.announcement_recipients?.filter((x: any) => x.read_at).length ?? 0} / {audienceSize(r)}</span> },
+          { key: 'acks', header: 'Acknowledged', value: (r) => (r.requires_acknowledgement ? r.announcement_recipients?.filter((x: any) => x.acknowledged_at).length : null), cell: (r) => (r.requires_acknowledgement ? <span className="tnum">{r.announcement_recipients?.filter((x: any) => x.acknowledged_at).length ?? 0} / {audienceSize(r)}</span> : '—') },
           { key: 'status', header: 'Status', cell: (r) => <StatusBadge status={r.status} /> },
           { key: '_a', header: '', sortable: false, exportable: false, className: 'text-right', cell: (r) => r.status === 'draft' && <Button size="sm" onClick={(e) => { e.stopPropagation(); publish.mutate(r.id) }}><Send /> Publish</Button> },
         ]} emptyTitle="No posts yet" />
@@ -207,7 +226,7 @@ export function SurveysPage() {
                 <p className="mt-1 flex-1 text-sm text-muted">{s.description}</p>
                 <p className="mt-3 text-xs text-subtle">{s.survey_questions?.length ?? 0} questions · open {fmtDate(s.starts_on)} – {fmtDate(s.ends_on)}{s.is_anonymous && ' · anonymous'}</p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {s.status === 'active' && (done.has(s.id) ? <Badge tone="success">You responded</Badge> : <Button size="sm" onClick={() => setTake(s)}>Take survey</Button>)}
+                  {s.status === 'active' && (!(s.starts_on <= isoDate() && isoDate() <= s.ends_on) ? <Badge>{isoDate() < s.starts_on ? `Opens ${fmtDate(s.starts_on)}` : 'Closed'}</Badge> : done.has(s.id) ? <Badge tone="success">You responded</Badge> : <Button size="sm" onClick={() => setTake(s)}>Take survey</Button>)}
                   {can('engagement.manage') && <><Button size="sm" variant="secondary" onClick={() => setResults(s)}><BarChart2 /> Results</Button><Button size="sm" variant="ghost" onClick={() => setBuild(s)}>Questions</Button></>}
                 </div>
               </Card>
