@@ -1,5 +1,5 @@
 import { useConfirm } from '@/components/common/confirm'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { isWithinInterval, parseISO, startOfMonth, endOfMonth } from 'date-fns'
@@ -109,8 +109,8 @@ export function MyLearning() {
 export function CoursePlayer() {
   const { id = '' } = useParams()
   const { employeeId } = useMe()
-  const course = useQuery({ queryKey: ['learning', 'course', id], queryFn: () => unwrap<any>(db.from('courses').select('*, course_modules(id, title, sort_order, course_lessons(id, title, lesson_type, content, resource_url, duration_minutes, sort_order)), assessments(id, title, kind, passing_score, max_attempts, is_active)').eq('id', id).single()) })
-  const enr = useQuery({ queryKey: ['learning', 'enrolment', id, employeeId], queryFn: () => unwrap<any>(db.from('course_enrolments').select('*, lesson_progress(lesson_id), assessment_results(assessment_id, score, passed, attempt), certificates(certificate_number, issued_at)').eq('course_id', id).eq('employee_id', employeeId).maybeSingle()) })
+  const course = useQuery({ queryKey: ['learning', 'course', id], queryFn: () => unwrap<any>(db.from('courses').select('*, course_modules(id, title, sort_order, course_lessons(id, title, lesson_type, content, resource_url, duration_minutes, sort_order)), assessments(id, title, kind, passing_score, max_attempts, time_limit_minutes, is_active, assessment_questions(id))').eq('id', id).single()) })
+  const enr = useQuery({ queryKey: ['learning', 'enrolment', id, employeeId], queryFn: () => unwrap<any>(db.from('course_enrolments').select('*, lesson_progress(lesson_id), assessment_results(assessment_id, score, passed, attempt), certificates(certificate_number, issued_at), employees(first_name, last_name)').eq('course_id', id).eq('employee_id', employeeId).maybeSingle()) })
   const [lesson, setLesson] = useState<any | null>(null)
   const [quiz, setQuiz] = useState<any | null>(null)
   const done = useAction((l: string) => rpc<number>('complete_lesson', { p_lesson: l }), { invalidate: [['learning']] })
@@ -122,10 +122,11 @@ export function CoursePlayer() {
       {(c) => {
         const mods = [...(c.course_modules ?? [])].sort((a, b) => a.sort_order - b.sort_order)
         const cert = enr.data?.certificates?.[0] ?? enr.data?.certificates
+        const quizzes = (c.assessments ?? []).filter((a: any) => a.is_active && (a.assessment_questions ?? []).length > 0)
         return (
           <div className="space-y-5">
             <PageHeader title={c.title} description={c.summary} crumbs={[{ label: 'Learning', to: '/learning/library' }, { label: 'Course' }]}
-              actions={!enr.data ? <Button loading={enrol.isPending} onClick={() => enrol.mutate()}>Enrol</Button> : cert?.certificate_number && <Button variant="secondary" onClick={() => downloadCertificate(c.title, cert.certificate_number, cert.issued_at)}><Award /> Certificate</Button>} />
+              actions={!enr.data ? <Button loading={enrol.isPending} onClick={() => enrol.mutate()}>Enrol</Button> : cert?.certificate_number && <Button variant="secondary" onClick={() => downloadCertificate(c.title, cert.certificate_number, cert.issued_at, [enr.data.employees?.first_name, enr.data.employees?.last_name].filter(Boolean).join(' ') || undefined)}><Award /> Certificate</Button>} />
             {enr.data && <Card className="flex items-center gap-4 p-4"><Progress value={enr.data.progress} tone={enr.data.status === 'completed' ? 'success' : 'primary'} /><span className="text-sm tnum">{enr.data.progress}%</span><StatusBadge status={enr.data.status} /></Card>}
             <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
               <div className="space-y-4">
@@ -139,12 +140,12 @@ export function CoursePlayer() {
                     ))}</ul>
                   </Card>
                 ))}
-                {(c.assessments ?? []).filter((a: any) => a.is_active).map((a: any) => {
+                {quizzes.map((a: any) => {
                   const res = (enr.data?.assessment_results ?? []).filter((r: any) => r.assessment_id === a.id)
                   const best = res.reduce((m: number, r: any) => Math.max(m, r.score), 0)
                   return (
                     <Card key={a.id} className="flex items-center justify-between gap-3 p-4">
-                      <div><div className="flex items-center gap-2 font-medium"><ListChecks className="h-4 w-4 text-primary" />{a.title}</div><div className="text-xs text-muted">Pass mark {a.passing_score}% · {res.length}/{a.max_attempts} attempts{res.length > 0 && ` · best ${best}%`}</div></div>
+                      <div><div className="flex items-center gap-2 font-medium"><ListChecks className="h-4 w-4 text-primary" />{a.title}</div><div className="text-xs text-muted">{a.assessment_questions.length} question{a.assessment_questions.length === 1 ? '' : 's'} · pass mark {a.passing_score}%{a.time_limit_minutes ? ` · ${a.time_limit_minutes} min` : ''} · {res.length}/{a.max_attempts} attempts{res.length > 0 && ` · best ${best}%`}</div></div>
                       {res.some((r: any) => r.passed) ? <Badge tone="success">Passed</Badge> : <Button size="sm" disabled={!enr.data || res.length >= a.max_attempts} onClick={() => setQuiz(a)}>{res.length ? 'Retry' : 'Start'}</Button>}
                     </Card>
                   )
@@ -154,7 +155,7 @@ export function CoursePlayer() {
                 <h3 className="font-semibold">About this course</h3>
                 {c.description && <p className="mt-2 text-muted">{c.description}</p>}
                 <dl className="mt-4 space-y-2"><div className="flex justify-between"><dt className="text-muted">Duration</dt><dd>{minutes(c.duration_minutes)}</dd></div><div className="flex justify-between"><dt className="text-muted">Level</dt><dd>{titleCase(c.level)}</dd></div>
-                  <div className="flex justify-between"><dt className="text-muted">Pass mark</dt><dd>{c.passing_score}%</dd></div>{c.instructor_name && <div className="flex justify-between"><dt className="text-muted">Instructor</dt><dd>{c.instructor_name}</dd></div>}</dl>
+                  {quizzes.length > 0 && <div className="flex justify-between"><dt className="text-muted">To complete</dt><dd>Lessons + pass {quizzes.length === 1 ? 'the quiz' : `${quizzes.length} quizzes`}</dd></div>}{c.instructor_name && <div className="flex justify-between"><dt className="text-muted">Instructor</dt><dd>{c.instructor_name}</dd></div>}</dl>
                 {c.instructor_bio && <p className="mt-3 text-xs text-muted">{c.instructor_bio}</p>}
               </Card>
             </div>
@@ -178,8 +179,16 @@ function TakeAssessment({ assessment, onClose }: { assessment: any; onClose: () 
   const [ans, setAns] = useState<Record<string, string>>({})
   const [result, setResult] = useState<any | null>(null)
   const submit = useAction(() => rpc('submit_assessment', { p_assessment: assessment.id, p_answers: ans }), { invalidate: [['learning']], onSuccess: setResult })
+  const limit = assessment.time_limit_minutes ? assessment.time_limit_minutes * 60 : null
+  const [left, setLeft] = useState(limit)
+  useEffect(() => {
+    if (!limit || result || !qs.data) return
+    const t = setInterval(() => setLeft((s) => (s == null ? s : Math.max(0, s - 1))), 1000)
+    return () => clearInterval(t)
+  }, [limit, result, qs.data])
+  useEffect(() => { if (left === 0 && !result && !submit.isPending) { toast.info('Time is up — your answers were submitted'); submit.mutate() } }, [left])
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()} title={assessment.title} description={`Pass mark ${assessment.passing_score}%. Answers are graded on the server.`} size="lg"
+    <Dialog open onOpenChange={(o) => !o && onClose()} title={assessment.title} description={`Pass mark ${assessment.passing_score}%.${left != null && !result ? ` Time left ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` : ''}`} size="lg"
       footer={!result ? <Button loading={submit.isPending} disabled={Object.keys(ans).length < (qs.data?.length ?? 0)} onClick={() => submit.mutate()}><Send /> Submit answers</Button> : <Button onClick={onClose}>Close</Button>}>
       {result ? (
         <div className="py-6 text-center"><div className={cn('figure text-5xl', result.passed ? 'text-success' : 'text-danger')}>{result.score}%</div><p className="mt-2 font-medium">{result.passed ? 'Passed' : 'Not passed'}</p><p className="text-sm text-muted">{result.passed ? 'Well done.' : `${result.attempts_left} attempt${result.attempts_left === 1 ? '' : 's'} left.`}</p></div>
@@ -231,7 +240,7 @@ export function ProgramsPage() {
           { name: 'level', label: 'Level', type: 'select', required: true, default: 'beginner', options: ['beginner', 'intermediate', 'advanced'].map((v) => ({ value: v, label: titleCase(v) })) },
           { name: 'summary', label: 'Summary', type: 'textarea' }, { name: 'description', label: 'Description', type: 'textarea' },
           { name: 'instructor_name', label: 'Instructor', type: 'text' }, { name: 'duration_minutes', label: 'Duration (minutes)', type: 'number', min: 1, default: 60, required: true },
-          { name: 'passing_score', label: 'Pass mark (%)', type: 'number', min: 0, max: 100, default: 70, required: true }, { name: 'instructor_bio', label: 'Instructor bio', type: 'textarea' },
+          { name: 'instructor_bio', label: 'Instructor bio', type: 'textarea' },
           { name: 'is_mandatory', label: 'Mandatory', type: 'switch' }, { name: 'certificate_enabled', label: 'Issue certificate on completion', type: 'switch', default: true },
           { name: 'status', label: 'Status', type: 'select', required: true, default: 'draft', options: ['draft', 'published', 'archived'].map((v) => ({ value: v, label: titleCase(v) })) }],
       }} />
@@ -248,13 +257,13 @@ function CourseBuilder({ course, onClose }: { course: any; onClose: () => void }
   const delMod = useAction((id: string) => unwrap(db.from('course_modules').delete().eq('id', id).select('id')), { invalidate: [['learning', 'builder', course.id]] })
   const [lessonFor, setLessonFor] = useState<string | null>(null)
   const [l, setL] = useState({ title: '', lesson_type: 'text', content: '', resource_url: '', duration_minutes: 10 })
-  const addLesson = useAction(() => unwrap(db.from('course_lessons').insert({ ...l, module_id: lessonFor, sort_order: 99, resource_url: l.resource_url || null, content: l.content || null }).select('id')), { success: 'Lesson added', invalidate: [['learning', 'builder', course.id]], onSuccess: () => { setLessonFor(null); setL({ title: '', lesson_type: 'text', content: '', resource_url: '', duration_minutes: 10 }) } })
+  const addLesson = useAction(() => unwrap(db.from('course_lessons').insert({ ...l, module_id: lessonFor, sort_order: Math.max(0, ...((mods.data ?? []).find((m) => m.id === lessonFor)?.course_lessons ?? []).map((x: any) => x.sort_order ?? 0)) + 1, resource_url: l.resource_url || null, content: l.content || null }).select('id')), { success: 'Lesson added', invalidate: [['learning', 'builder', course.id]], onSuccess: () => { setLessonFor(null); setL({ title: '', lesson_type: 'text', content: '', resource_url: '', duration_minutes: 10 }) } })
   const delLesson = useAction((id: string) => unwrap(db.from('course_lessons').delete().eq('id', id).select('id')), { invalidate: [['learning', 'builder', course.id]] })
   return (
     <Drawer open onOpenChange={(o) => !o && onClose()} title={course.title} description="Modules and lessons">
       <div className="space-y-3">{(mods.data ?? []).map((m) => (
         <Card key={m.id}><CardHeader title={m.title} actions={<><Button size="sm" variant="secondary" onClick={() => setLessonFor(m.id)}><Plus /> Lesson</Button><Button size="icon-sm" variant="ghost" aria-label="Delete module" onClick={async () => { if ((await confirm({ title: `Delete module “${m.title}”?`, description: 'All lessons in this module are deleted too.', confirmLabel: 'Delete module', danger: true })).ok) delMod.mutate(m.id) }}><Trash2 /></Button></>} />
-          <ul className="divide-y divide-line">{(m.course_lessons ?? []).map((x: any) => <li key={x.id} className="flex items-center justify-between px-5 py-2 text-sm"><span>{x.title} <span className="text-xs text-muted">· {titleCase(x.lesson_type)} · {x.duration_minutes} min</span></span><Button size="icon-sm" variant="ghost" aria-label="Delete lesson" onClick={async () => { if ((await confirm({ title: `Delete lesson “${x.title}”?`, confirmLabel: 'Delete lesson', danger: true })).ok) delLesson.mutate(x.id) }}><Trash2 /></Button></li>)}
+          <ul className="divide-y divide-line">{[...(m.course_lessons ?? [])].sort((a: any, b: any) => a.sort_order - b.sort_order).map((x: any) => <li key={x.id} className="flex items-center justify-between px-5 py-2 text-sm"><span>{x.title} <span className="text-xs text-muted">· {titleCase(x.lesson_type)} · {x.duration_minutes} min</span></span><Button size="icon-sm" variant="ghost" aria-label="Delete lesson" onClick={async () => { if ((await confirm({ title: `Delete lesson “${x.title}”?`, confirmLabel: 'Delete lesson', danger: true })).ok) delLesson.mutate(x.id) }}><Trash2 /></Button></li>)}
             {(m.course_lessons ?? []).length === 0 && <li className="px-5 py-3 text-sm text-muted">No lessons</li>}</ul>
         </Card>
       ))}</div>
