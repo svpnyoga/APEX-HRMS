@@ -98,12 +98,12 @@ function ApproveDialog({ req, roles, onClose }: { req: Req; roles: { id: string;
   const isSuper = !!access?.roles.includes('super_admin')
   const initial = useMemo(() => {
     const s = new Set([req.requested_role])
-    if (!['kiosk', 'super_admin'].includes(req.requested_role)) s.add('employee')
+    if (req.requested_role !== 'super_admin') s.add('employee')
     if (req.requested_role === 'super_admin' && !isSuper) { s.delete('super_admin'); s.add('employee') }
     return [...s]
   }, [req, isSuper])
   const [sel, setSel] = useState<string[]>(initial)
-  const [link, setLink] = useState<'create' | 'existing' | 'none'>(req.requested_role === 'kiosk' ? 'none' : 'create')
+  const [link, setLink] = useState<'create' | 'existing' | 'none'>('create')
   const [emp, setEmp] = useState<string | null>(null)
   const [note, setNote] = useState('')
   const dangerous = sel.some((c) => ['super_admin', 'hr_admin', 'finance_admin'].includes(c))
@@ -133,7 +133,7 @@ function ApproveDialog({ req, roles, onClose }: { req: Req; roles: { id: string;
           <div className="grid gap-2 sm:grid-cols-3">
             {opt('create', 'Create new', 'A new employee with a generated ID')}
             {opt('existing', 'Link existing', 'HR already added this person')}
-            {opt('none', 'No record', 'Kiosk or external account')}
+            {opt('none', 'No record', 'External account (no employee record)')}
           </div>
           {link === 'existing' && <div className="mt-2"><EmployeePicker value={emp} onChange={setEmp} placeholder="Choose the employee" filter={(e: any) => !e.user_id} /></div>}
         </Field>

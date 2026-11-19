@@ -73,7 +73,7 @@ export function FaceAdmin() {
   ]
   const attemptCols: Column<any>[] = [
     { key: 'created_at', header: 'Time', cell: (r) => fmtDateTime(r.created_at) },
-    { key: 'employee', header: 'Employee', value: (r) => names.get(r.employee_id)?.full_name ?? (r.mode === 'identify' ? 'Unidentified (kiosk)' : '—') },
+    { key: 'employee', header: 'Employee', value: (r) => names.get(r.employee_id)?.full_name ?? '—' },
     { key: 'mode', header: 'Mode', value: (r) => titleCase(r.mode) },
     { key: 'outcome', header: 'Outcome', cell: (r) => <StatusBadge status={r.outcome} /> },
     { key: 'similarity', header: 'Similarity', className: 'tnum' },

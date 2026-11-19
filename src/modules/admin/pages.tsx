@@ -27,10 +27,14 @@ import { ENTITY_LABEL } from '@/modules/approvals/Inbox'
 const linkedEmployee = (u: any) => (Array.isArray(u?.employees) ? u.employees[0] : u?.employees) ?? null
 
 /** The People tab of User management (see ./access.tsx for the page). */
+/** The kiosk role stays in the database (unused) but is not offered anywhere in the app. */
+const HIDDEN_ROLE = 'kiosk'
+
 export function UsersListPage() {
   const confirm = useConfirm()
   const users = useQuery({ queryKey: ['admin', 'users'], queryFn: () => unwrap<any[]>(db.from('user_profiles').select('*, user_roles(role_id, roles(code, name)), employees(id, employee_code, first_name, last_name)').order('full_name')) })
-  const roles = useLookup<any>('roles', 'id, code, name', 'name')
+  const rolesQ = useLookup<any>('roles', 'id, code, name', 'name')
+  const roles = { data: rolesQ.data?.filter((r) => r.code !== HIDDEN_ROLE) }
   const [invite, setInvite] = useState(false)
   const [edit, setEdit] = useState<any | null>(null)
   const toggle = useAction(({ id, active }: { id: string; active: boolean }) => adminUsers({ action: active ? 'activate' : 'deactivate', user_id: id }), { success: 'User updated', invalidate: [['admin', 'users']] })
@@ -107,7 +111,7 @@ function UserRolesDrawer({ user, roles, onClose }: { user: any; roles: any[]; on
 export function RolesPage() {
   const { can } = useAuth()
   const { orgId } = useMe()
-  const roles = useQuery({ queryKey: ['admin', 'roles'], queryFn: () => unwrap<any[]>(db.from('roles').select('*, role_permissions(permission_code)').order('name')) })
+  const roles = useQuery({ queryKey: ['admin', 'roles'], queryFn: async () => (await unwrap<any[]>(db.from('roles').select('*, role_permissions(permission_code)').order('name'))).filter((x) => x.code !== HIDDEN_ROLE) })
   const perms = useQuery({ queryKey: ['admin', 'perms'], queryFn: () => unwrap<any[]>(db.from('permissions').select('*').neq('code', '*').order('module').order('code')) })
   const [role, setRole] = useState<string>('')
   const [newRole, setNewRole] = useState(false)
@@ -300,9 +304,8 @@ export function EmailSettingsPage() {
 
 export function IntegrationsPage() {
   const health = useQuery({ queryKey: ['admin', 'integration-health'], queryFn: async () => {
-    const devices = await unwrap<any[]>(db.from('attendance_devices').select('id, name, last_seen_at, api_key_hash, is_active'))
     const outbox = await unwrap<any[]>(db.from('email_outbox').select('status').limit(500))
-    return { devices, queued: outbox.filter((o) => o.status === 'queued').length, sent: outbox.filter((o) => o.status === 'sent').length }
+    return { queued: outbox.filter((o) => o.status === 'queued').length, sent: outbox.filter((o) => o.status === 'sent').length }
   } })
   const h = health.data
   return (
@@ -310,7 +313,6 @@ export function IntegrationsPage() {
       <PageHeader title="Integration settings" description="Each integration is behind a replaceable interface. Status below reflects real activity — nothing is shown as connected unless it has actually communicated." />
       <StatStrip items={[
         { label: 'Face models', value: 'On-device', hint: 'Human · FaceRes + anti-spoof + liveness, served from /models' },
-        { label: 'Biometric devices', value: h ? `${h.devices.filter((d) => d.last_seen_at).length}/${h.devices.length}` : '—', hint: 'Seen at least once / registered', to: '/attendance/devices' },
         { label: 'Emails sent', value: h?.sent ?? '—', hint: `${h?.queued ?? 0} queued`, to: '/admin/email' },
         { label: 'Maps', value: 'OpenStreetMap', hint: 'Change with VITE_MAP_TILE_URL' },
       ]} />

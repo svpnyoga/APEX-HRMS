@@ -35,7 +35,7 @@ const P = {
   AttendanceDashboard: lz(M.att, 'AttendanceDashboard'), DailyAttendance: lz(M.att, 'DailyAttendance'), MonthlyRegister: lz(M.att, 'MonthlyRegister'),
   AttendanceCalendarPage: lz(M.att, 'AttendanceCalendarPage'), ClockPage: lz(M.att, 'ClockPage'), AttendanceExceptions: lz(M.att, 'AttendanceExceptions'),
   OvertimePage: lz(M.att, 'OvertimePage'), RegularisationPage: lz(M.att, 'RegularisationPage'), ShiftsPage: lz(M.att, 'ShiftsPage'), SchedulesPage: lz(M.att, 'SchedulesPage'),
-  HolidaysPage: lz(M.att, 'HolidaysPage'), DevicesPage: lz(M.att, 'DevicesPage'), FaceAdmin: lz(M.face, 'FaceAdmin'), KioskPage: lz(M.clock, 'KioskPage'),
+  HolidaysPage: lz(M.att, 'HolidaysPage'), FaceAdmin: lz(M.face, 'FaceAdmin'),
   LeaveDashboard: lz(M.leave, 'LeaveDashboard'), LeaveApplicationsPage: lz(M.leave, 'LeaveApplicationsPage'), ApplyLeavePage: lz(M.leave, 'ApplyLeavePage'),
   LeaveApprovalsPage: lz(M.leave, 'LeaveApprovalsPage'), LeaveTypesPage: lz(M.leave, 'LeaveTypesPage'), LeavePoliciesPage: lz(M.leave, 'LeavePoliciesPage'),
   LeaveBalancesPage: lz(M.leave, 'LeaveBalancesPage'), LeaveAccrualPage: lz(M.leave, 'LeaveAccrualPage'), LeaveEncashmentPage: lz(M.leave, 'LeaveEncashmentPage'),
@@ -91,7 +91,6 @@ function RequireAuth() {
 function Home() {
   const { access, can } = useAuth()
   if (!access) return null
-  if (access.permissions.length === 1 && access.permissions[0] === 'attendance.kiosk') return <Navigate to="/kiosk" replace />
   if (isSelfServiceOnly(access.permissions) && !access.is_manager) return <Navigate to="/me" replace />
   if (can('dashboard.view')) return <Navigate to="/dashboard" replace />
   if (access.is_manager) return <Navigate to="/dashboard/workforce" replace />
@@ -152,7 +151,6 @@ export const ROUTES: { path: string; element: ReactNode }[] = [
   { path: '/attendance/calendar', element: <P.AttendanceCalendarPage /> },
   { path: '/attendance/clock', element: g('attendance.clock', <P.ClockPage />) },
   { path: '/attendance/face', element: g('attendance.face_enrol', <P.FaceAdmin />) },
-  { path: '/attendance/devices', element: g('attendance.devices', <P.DevicesPage />) },
   { path: '/attendance/shifts', element: g('attendance.manage', <P.ShiftsPage />) },
   { path: '/attendance/schedules', element: g('attendance.manage', <P.SchedulesPage />) },
   { path: '/attendance/overtime', element: g(VIEW_ATT, <P.OvertimePage />) },
@@ -293,7 +291,6 @@ export default function App() {
                 <Route path="/signup" element={<P.SignupPage />} />
                 <Route element={<RequireAuth />}>
                   <Route path="/" element={<Home />} />
-                  <Route path="/kiosk" element={<Gate perm="attendance.kiosk"><P.KioskPage /></Gate>} />
                   <Route element={<EssShell />}>{ESS_ROUTES.map((r) => <Route key={r.path} path={r.path} element={<Suspense fallback={<Loading />}>{r.element}</Suspense>} />)}</Route>
                   <Route element={<AppShell />}>
                     {ROUTES.map((r) => <Route key={r.path} path={r.path} element={<Suspense fallback={<Loading />}>{r.element}</Suspense>} />)}

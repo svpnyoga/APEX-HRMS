@@ -201,27 +201,6 @@ export function ClockPanel() {
   )
 }
 
-/** Shared, supervised kiosk: 1:N identification. Signed in with a kiosk-role account. */
-export function KioskPage() {
-  const [key, setKey] = useState(0)
-  const [result, setResult] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null)
-  const onVerify = useCallback(async (c: VerifyCapture) => {
-    try {
-      const r: any = await rpc('kiosk_identify_clock', { p_embedding: JSON.stringify(c.embedding), p_model: c.modelId, p_antispoof: c.antispoof, p_liveness: c.liveness, p_challenge_passed: c.challengePassed, p_quality: c.quality })
-      if (r.outcome === 'matched') setResult({ tone: 'success', text: `${r.employee_name} · ${r.event_type === 'in' ? 'clocked in' : 'clocked out'} at ${fmtTime(r.occurred_at)}` })
-      else setResult({ tone: 'danger', text: r.outcome === 'no_match' ? 'Not recognised. Please see HR.' : 'Check failed. Please try again.' })
-    } catch (e) { setResult({ tone: 'danger', text: errorMessage(e) }) }
-    setTimeout(() => { setResult(null); setKey((k) => k + 1) }, 3500)
-  }, [])
-  return (
-    <div className="flex min-h-full flex-col items-center justify-center bg-ink p-6">
-      <h1 className="mb-1 text-2xl font-semibold text-white">Face attendance</h1>
-      <p className="mb-6 text-sm text-ink-muted">Stand in front of the camera and follow the prompts</p>
-      <div className="w-full max-w-lg"><FaceScanner key={key} mode="verify" onVerify={onVerify} resultLabel={result} /></div>
-    </div>
-  )
-}
-
 export function SiteBadge({ name }: { name?: string | null }) {
   return name ? <span className="inline-flex items-center gap-1 text-xs text-muted"><MapPin className="h-3 w-3" />{name}</span> : null
 }

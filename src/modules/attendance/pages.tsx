@@ -128,7 +128,7 @@ function ManualAttendanceDialog({ open, onOpenChange, initial }: { open: boolean
         <Field label="Employee" required className="sm:col-span-2"><EmployeePicker value={emp} onChange={setEmp} /></Field>
         <Field label="Date" required><Input type="date" value={date} max={isoDate()} onChange={(e) => setDate(e.target.value)} /></Field>
         <div className="grid grid-cols-2 gap-2"><Field label="In"><Input type="time" value={tin} onChange={(e) => { setTouched(true); setIn(e.target.value) }} /></Field><Field label="Out"><Input type="time" value={tout} onChange={(e) => { setTouched(true); setOut(e.target.value) }} /></Field></div>
-        <Field label="Reason" required className="sm:col-span-2"><Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Biometric device offline at Hosur gate" /></Field>
+        <Field label="Reason" required className="sm:col-span-2"><Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Forgot to clock out at Hosur gate" /></Field>
       </div>
     </Dialog>
   )
@@ -463,46 +463,3 @@ export function HolidaysPage() {
   )
 }
 
-export function DevicesPage() {
-  const [key, setKey] = useState<{ device: string; key: string } | null>(null)
-  const regen = async (row: any) => {
-    const raw = Array.from(crypto.getRandomValues(new Uint8Array(24))).map((b) => b.toString(16).padStart(2, '0')).join('')
-    const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw)))).map((b) => b.toString(16).padStart(2, '0')).join('')
-    const { error } = await db.from('attendance_devices').update({ api_key_hash: hash }).eq('id', row.id)
-    if (error) return toast.error(error.message)
-    setKey({ device: row.name, key: `${row.id}.${raw}` })
-  }
-  return (
-    <>
-      <CrudPage cfg={{
-        title: 'Biometric devices', description: 'Fingerprint, RFID or face terminals push punches to the biometric-push edge function using a per-device key. Map device user codes to employees below.',
-        table: 'attendance_devices', select: '*, work_sites(name)', permission: 'attendance.devices', orderBy: { column: 'name' }, remove: { column: 'is_active', value: false },
-        columns: [
-          { key: 'name', header: 'Device' }, { key: 'device_type', header: 'Type', value: (r) => titleCase(r.device_type) }, { key: 'vendor', header: 'Vendor', hideOnMobile: true },
-          { key: 'serial_number', header: 'Serial', hideOnMobile: true }, { key: 'site', header: 'Site', value: (r) => r.work_sites?.name },
-          { key: 'key', header: 'API key', value: (r) => (r.api_key_hash ? 'Issued' : 'Not issued'), cell: (r) => <Badge tone={r.api_key_hash ? 'success' : 'warning'}>{r.api_key_hash ? 'Issued' : 'Not issued'}</Badge> },
-          { key: 'last_seen_at', header: 'Last seen', cell: (r) => (r.last_seen_at ? fmtDate(r.last_seen_at, 'dd MMM HH:mm') : 'Never') },
-        ],
-        rowActions: (r) => <Button size="sm" variant="ghost" onClick={() => regen(r)}><KeyRound /> {r.api_key_hash ? 'Rotate key' : 'Issue key'}</Button>,
-        fields: [
-          { name: 'name', label: 'Name', type: 'text', required: true },
-          { name: 'device_type', label: 'Type', type: 'select', required: true, options: ['fingerprint', 'face_terminal', 'rfid', 'kiosk'].map((v) => ({ value: v, label: titleCase(v) })) },
-          { name: 'vendor', label: 'Vendor', type: 'text' }, { name: 'serial_number', label: 'Serial number', type: 'text' },
-          { name: 'site_id', label: 'Site', type: 'lookup', lookup: { table: 'work_sites' } }, { name: 'is_active', label: 'Active', type: 'switch', default: true },
-        ],
-      }} />
-      <div className="mt-6"><CrudPage cfg={{
-        title: 'Device user mappings', embedded: true, table: 'device_user_mappings', select: '*, attendance_devices(name), employees(first_name, last_name, employee_code)', permission: 'attendance.devices', orgScoped: false,
-        queryKey: ['crud', 'device_user_mappings'], remove: 'delete',
-        columns: [{ key: 'device', header: 'Device', value: (r) => r.attendance_devices?.name }, { key: 'device_user_code', header: 'Device user code' },
-          { key: 'employee', header: 'Employee', value: (r) => `${r.employees?.first_name} ${r.employees?.last_name} (${r.employees?.employee_code})` }],
-        fields: [{ name: 'device_id', label: 'Device', type: 'lookup', lookup: { table: 'attendance_devices' }, required: true },
-          { name: 'device_user_code', label: 'User code on device', type: 'text', required: true }, { name: 'employee_id', label: 'Employee', type: 'employee', required: true, wide: true }],
-      }} /></div>
-      <Dialog open={!!key} onOpenChange={(o) => !o && setKey(null)} title={`API key for ${key?.device}`} description="Copy it now — it is stored only as a hash and cannot be shown again.">
-        <code className="block break-all rounded-md bg-raised p-3 text-sm">{key?.key}</code>
-        <p className="mt-3 text-sm text-muted">Configure the device (or its middleware) to POST punches to <code>/functions/v1/biometric-push</code> with header <code>x-device-key</code>. See docs/INTEGRATIONS.md.</p>
-      </Dialog>
-    </>
-  )
-}

@@ -9,7 +9,6 @@ export const SIGNUP_ROLES: { code: string; name: string; hint: string }[] = [
   { code: 'finance_admin', name: 'Finance / payroll', hint: 'Payroll, claims and reimbursements' },
   { code: 'management', name: 'Management', hint: 'Company-wide dashboards and analytics' },
   { code: 'super_admin', name: 'Administrator', hint: 'Everything, including users and roles' },
-  { code: 'kiosk', name: 'Attendance kiosk device', hint: 'A shared, supervised device for face check-in' },
 ]
 
 export const roleName = (code?: string | null) => SIGNUP_ROLES.find((r) => r.code === code)?.name ?? code ?? ''

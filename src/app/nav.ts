@@ -36,7 +36,6 @@ export const NAV: NavModule[] = [
     { label: 'Attendance Calendar', path: '/attendance/calendar' },
     { label: 'Clock In / Clock Out', path: '/attendance/clock', perm: 'attendance.clock' },
     { label: 'Face Recognition', path: '/attendance/face', perm: 'attendance.face_enrol' },
-    { label: 'Biometric Devices', path: '/attendance/devices', perm: 'attendance.devices' },
     { label: 'Shift Management', path: '/attendance/shifts', perm: 'attendance.manage' },
     { label: 'Work Schedules', path: '/attendance/schedules', perm: 'attendance.manage' },
     { label: 'Overtime Management', path: '/attendance/overtime', perm: ['attendance.view', 'attendance.view_team'] },
