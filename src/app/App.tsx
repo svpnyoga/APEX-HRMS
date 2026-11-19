@@ -2,8 +2,8 @@ import { lazy, Suspense, useEffect, type ComponentType, type ReactNode } from 'r
 import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation, useParams } from 'react-router-dom'
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
 import { Toaster } from 'sonner'
-import { ShieldOff } from 'lucide-react'
-import { AuthProvider, isSelfServiceOnly, useAuth } from './auth'
+import { ShieldOff, UserX } from 'lucide-react'
+import { AuthProvider, isSelfServiceOnly, useAuth, useMe } from './auth'
 import { NAV } from './nav'
 import { db } from '@/lib/api'
 import { ConfirmProvider } from '@/components/common/confirm'
@@ -117,6 +117,18 @@ function IdleLogout() {
 }
 
 const g = (perm: string | string[] | undefined, el: ReactNode) => <Gate perm={perm}>{el}</Gate>
+
+/** Personal pages ("my leave", "my claims", "my appraisal history") need the login to be linked to an employee record.
+ *  Admin-only logins (e.g. an owner account) get an explanation instead of a database error about an empty id. */
+function RequireEmployee({ children }: { children: ReactNode }) {
+  const { employeeId } = useMe()
+  const { access } = useAuth()
+  if (!access) return <LoadingRows />
+  if (!employeeId) return <EmptyState icon={UserX} title="Your login is not linked to an employee record"
+    description="This page shows your own records (leave, claims, appraisals, payslips…). Link your login to an employee in Administration › User management, or open the employee's profile to see their details." />
+  return <>{children}</>
+}
+const mine = (el: ReactNode) => <RequireEmployee>{el}</RequireEmployee>
 const VIEW_ATT = ['attendance.view', 'attendance.view_team']
 
 export const ROUTES: { path: string; element: ReactNode }[] = [
@@ -151,7 +163,7 @@ export const ROUTES: { path: string; element: ReactNode }[] = [
   { path: '/attendance/holidays', element: <P.HolidaysPage /> },
   { path: '/leave', element: g(['leave.view', 'leave.view_team'], <P.LeaveDashboard />) },
   { path: '/leave/applications', element: <P.LeaveApplicationsPage /> },
-  { path: '/leave/apply', element: g('leave.apply', <P.ApplyLeavePage />) },
+  { path: '/leave/apply', element: g('leave.apply', mine(<P.ApplyLeavePage />)) },
   { path: '/leave/approvals', element: <P.LeaveApprovalsPage /> },
   { path: '/leave/types', element: g('leave.manage', <P.LeaveTypesPage />) },
   { path: '/leave/policies', element: g('leave.manage', <P.LeavePoliciesPage />) },
@@ -174,8 +186,8 @@ export const ROUTES: { path: string; element: ReactNode }[] = [
   { path: '/payroll/adjustments', element: g('payroll.view', <P.AdjustmentsPage />) },
   { path: '/payroll/fnf', element: g('payroll.view', <P.FnfPage />) },
   { path: '/claims', element: g(['claims.view', 'claims.view_team', 'claims.reimburse'], <P.ClaimsDashboard />) },
-  { path: '/claims/new', element: g('claims.submit', <P.SubmitClaimPage />) },
-  { path: '/claims/mine', element: g('claims.submit', <P.MyClaimsPage />) },
+  { path: '/claims/new', element: g('claims.submit', mine(<P.SubmitClaimPage />)) },
+  { path: '/claims/mine', element: g('claims.submit', mine(<P.MyClaimsPage />)) },
   { path: '/claims/all', element: g(['claims.view', 'claims.view_team', 'claims.reimburse'], <P.AllClaimsPage />) },
   { path: '/claims/categories', element: g('claims.manage', <P.ClaimCategoriesPage />) },
   { path: '/claims/policies', element: g('claims.manage', <P.ExpensePoliciesPage />) },
@@ -187,12 +199,12 @@ export const ROUTES: { path: string; element: ReactNode }[] = [
   { path: '/performance/goals', element: <P.GoalsPage /> },
   { path: '/performance/kpis', element: g('performance.manage', <P.KpisPage />) },
   { path: '/performance/reviews', element: g(['performance.view', 'performance.view_team'], <P.ReviewsPage />) },
-  { path: '/performance/self', element: <P.ReviewStagePage stage="self" /> },
+  { path: '/performance/self', element: mine(<P.ReviewStagePage stage="self" />) },
   { path: '/performance/manager', element: g(['performance.view_team', 'performance.manage'], <P.ReviewStagePage stage="manager" />) },
   { path: '/performance/hr', element: g('performance.manage', <P.ReviewStagePage stage="hr" />) },
   { path: '/performance/feedback', element: <P.FeedbackPage /> },
   { path: '/performance/ratings', element: g('performance.manage', <P.RatingScalesPage />) },
-  { path: '/performance/history', element: <P.AppraisalHistoryPage /> },
+  { path: '/performance/history', element: mine(<P.AppraisalHistoryPage />) },
   { path: '/engagement/announcements', element: <P.AnnouncementsPage category="announcement" /> },
   { path: '/engagement/news', element: <P.AnnouncementsPage category="news" /> },
   { path: '/engagement/communication', element: <P.AnnouncementsPage category="communication" /> },
@@ -251,10 +263,10 @@ export const ROUTES: { path: string; element: ReactNode }[] = [
 ]
 
 const ESS_ROUTES: { path: string; element: ReactNode }[] = [
-  { path: '/me', element: <P.EssHome /> }, { path: '/me/attendance', element: <P.EssAttendance /> }, { path: '/me/leave', element: <P.EssLeave /> },
-  { path: '/me/claims', element: <P.EssClaims /> }, { path: '/me/payslips', element: <P.EssPayslips /> }, { path: '/me/learning', element: <P.EssLearning /> },
-  { path: '/me/performance', element: <P.EssPerformance /> }, { path: '/me/announcements', element: <P.MyAnnouncements /> }, { path: '/me/approvals', element: <P.EssApprovals /> },
-  { path: '/me/profile', element: <P.EssProfile /> }, { path: '/me/resignation', element: <P.EssResignation /> },
+  { path: '/me', element: mine(<P.EssHome />) }, { path: '/me/attendance', element: mine(<P.EssAttendance />) }, { path: '/me/leave', element: mine(<P.EssLeave />) },
+  { path: '/me/claims', element: mine(<P.EssClaims />) }, { path: '/me/payslips', element: mine(<P.EssPayslips />) }, { path: '/me/learning', element: mine(<P.EssLearning />) },
+  { path: '/me/performance', element: mine(<P.EssPerformance />) }, { path: '/me/announcements', element: <P.MyAnnouncements /> }, { path: '/me/approvals', element: <P.EssApprovals /> },
+  { path: '/me/profile', element: mine(<P.EssProfile />) }, { path: '/me/resignation', element: mine(<P.EssResignation />) },
 ]
 
 // Development guard: every sidebar item must resolve to a real route (no dead menus).
