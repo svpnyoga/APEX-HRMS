@@ -1,3 +1,4 @@
+import { useConfirm } from '@/components/common/confirm'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -151,6 +152,7 @@ export function MyClaimsPage({ embedded }: { embedded?: boolean }) {
   const q = useClaims((x) => x.eq('employee_id', employeeId), `mine-${employeeId}`)
   const [open, setOpen] = useState<any | null>(null)
   const [creating, setCreating] = useState(false)
+  const confirm = useConfirm()
   const del = useAction((id: string) => unwrap(db.from('expense_claims').delete().eq('id', id).eq('status', 'draft').select('id')), { success: 'Draft deleted', invalidate: [['claims']] })
   return (
     <div className="space-y-4">
@@ -163,7 +165,7 @@ export function MyClaimsPage({ embedded }: { embedded?: boolean }) {
         { label: 'Reimbursed (all time)', value: money((q.data ?? []).filter((r) => r.status === 'reimbursed').reduce((a, r) => a + Number(r.approved_amount ?? r.amount), 0)), tone: 'success' },
       ]} />
       <DataTable rows={q.data} loading={q.isLoading} error={q.error} onRowClick={(r) => setOpen({ ...r, is_mine: true })} columns={[...claimCols(false),
-        { key: '_a', header: '', sortable: false, exportable: false, className: 'text-right', cell: (r) => r.status === 'draft' && <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); del.mutate(r.id) }}>Delete</Button> }]}
+        { key: '_a', header: '', sortable: false, exportable: false, className: 'text-right', cell: (r) => r.status === 'draft' && <Button size="sm" variant="ghost" onClick={async (e) => { e.stopPropagation(); if ((await confirm({ title: `Delete draft ${r.claim_number}?`, description: `${r.title} · ${money(r.amount, true)}. This cannot be undone.`, confirmLabel: 'Delete draft', danger: true })).ok) del.mutate(r.id) }}>Delete</Button> }]}
         emptyTitle="No claims yet" emptyDescription="Submit travel, food, fuel and other business expenses with receipts." />
       {open && <ClaimDetail claim={open} onClose={() => setOpen(null)} />}
       <Dialog open={creating} onOpenChange={setCreating} title="New claim" size="lg"><ClaimForm onDone={() => setCreating(false)} /></Dialog>

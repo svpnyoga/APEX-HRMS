@@ -238,6 +238,7 @@ function StructureEditor({ structure, writable, onClose }: { structure: any; wri
   const comps = useQuery({ queryKey: ['payroll', 'comps-earn'], queryFn: () => unwrap<any[]>(db.from('salary_components').select('*').eq('component_type', 'earning').eq('is_active', true).order('display_order')) })
   const [comp, setComp] = useState(''); const [calc, setCalc] = useState(''); const [val, setVal] = useState('')
   const add = useAction(() => unwrap(db.from('salary_structure_components').insert({ structure_id: structure.id, component_id: comp, calc_type: calc || null, value: Number(val || 0) }).select('id')), { success: 'Component added', invalidate: [['payroll', 'ssc', structure.id]], onSuccess: () => { setComp(''); setVal(''); setCalc('') } })
+  const confirm = useConfirm()
   const del = useAction((id: string) => unwrap(db.from('salary_structure_components').delete().eq('id', id).select('id')), { invalidate: [['payroll', 'ssc', structure.id]] })
   const [gross, setGross] = useState(50000)
   const preview = useMemo(() => {
@@ -254,7 +255,7 @@ function StructureEditor({ structure, writable, onClose }: { structure: any; wri
       <DataTable rows={lines.data} loading={lines.isLoading} searchable={false} columns={[
         { key: 'name', header: 'Component', value: (r) => r.salary_components?.name }, { key: 'calc', header: 'Calculation', value: (r) => titleCase(r.calc_type ?? r.salary_components?.calc_type) },
         { key: 'value', header: 'Value', className: 'tnum' },
-        ...(writable ? [{ key: '_a', header: '', sortable: false, exportable: false, cell: (r: any) => <Button size="icon-sm" variant="ghost" aria-label="Remove" onClick={() => del.mutate(r.id)}><Trash2 /></Button> } as Column<any>] : []),
+        ...(writable ? [{ key: '_a', header: '', sortable: false, exportable: false, cell: (r: any) => <Button size="icon-sm" variant="ghost" aria-label="Remove" onClick={async () => { if ((await confirm({ title: `Remove ${r.salary_components?.name ?? 'this component'} from the structure?`, confirmLabel: 'Remove', danger: true })).ok) del.mutate(r.id) }}><Trash2 /></Button> } as Column<any>] : []),
       ]} emptyTitle="No components" />
       {writable && (
         <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto_100px_auto]">

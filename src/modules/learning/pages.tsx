@@ -1,3 +1,4 @@
+import { useConfirm } from '@/components/common/confirm'
 import { useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -243,6 +244,7 @@ function CourseBuilder({ course, onClose }: { course: any; onClose: () => void }
   const mods = useQuery({ queryKey: ['learning', 'builder', course.id], queryFn: () => unwrap<any[]>(db.from('course_modules').select('*, course_lessons(*)').eq('course_id', course.id).order('sort_order')) })
   const [mt, setMt] = useState('')
   const addMod = useAction(() => unwrap(db.from('course_modules').insert({ course_id: course.id, title: mt, sort_order: (mods.data?.length ?? 0) + 1 }).select('id')), { invalidate: [['learning', 'builder', course.id]], onSuccess: () => setMt('') })
+  const confirm = useConfirm()
   const delMod = useAction((id: string) => unwrap(db.from('course_modules').delete().eq('id', id).select('id')), { invalidate: [['learning', 'builder', course.id]] })
   const [lessonFor, setLessonFor] = useState<string | null>(null)
   const [l, setL] = useState({ title: '', lesson_type: 'text', content: '', resource_url: '', duration_minutes: 10 })
@@ -251,8 +253,8 @@ function CourseBuilder({ course, onClose }: { course: any; onClose: () => void }
   return (
     <Drawer open onOpenChange={(o) => !o && onClose()} title={course.title} description="Modules and lessons">
       <div className="space-y-3">{(mods.data ?? []).map((m) => (
-        <Card key={m.id}><CardHeader title={m.title} actions={<><Button size="sm" variant="secondary" onClick={() => setLessonFor(m.id)}><Plus /> Lesson</Button><Button size="icon-sm" variant="ghost" aria-label="Delete module" onClick={() => delMod.mutate(m.id)}><Trash2 /></Button></>} />
-          <ul className="divide-y divide-line">{(m.course_lessons ?? []).map((x: any) => <li key={x.id} className="flex items-center justify-between px-5 py-2 text-sm"><span>{x.title} <span className="text-xs text-muted">· {titleCase(x.lesson_type)} · {x.duration_minutes} min</span></span><Button size="icon-sm" variant="ghost" aria-label="Delete lesson" onClick={() => delLesson.mutate(x.id)}><Trash2 /></Button></li>)}
+        <Card key={m.id}><CardHeader title={m.title} actions={<><Button size="sm" variant="secondary" onClick={() => setLessonFor(m.id)}><Plus /> Lesson</Button><Button size="icon-sm" variant="ghost" aria-label="Delete module" onClick={async () => { if ((await confirm({ title: `Delete module “${m.title}”?`, description: 'All lessons in this module are deleted too.', confirmLabel: 'Delete module', danger: true })).ok) delMod.mutate(m.id) }}><Trash2 /></Button></>} />
+          <ul className="divide-y divide-line">{(m.course_lessons ?? []).map((x: any) => <li key={x.id} className="flex items-center justify-between px-5 py-2 text-sm"><span>{x.title} <span className="text-xs text-muted">· {titleCase(x.lesson_type)} · {x.duration_minutes} min</span></span><Button size="icon-sm" variant="ghost" aria-label="Delete lesson" onClick={async () => { if ((await confirm({ title: `Delete lesson “${x.title}”?`, confirmLabel: 'Delete lesson', danger: true })).ok) delLesson.mutate(x.id) }}><Trash2 /></Button></li>)}
             {(m.course_lessons ?? []).length === 0 && <li className="px-5 py-3 text-sm text-muted">No lessons</li>}</ul>
         </Card>
       ))}</div>
@@ -369,11 +371,12 @@ function QuestionBuilder({ assessment, onClose }: { assessment: any; onClose: ()
     const [nq] = await unwrap<any[]>(db.from('assessment_questions').insert({ assessment_id: assessment.id, question: q, sort_order: (qs.data?.length ?? 0) + 1 }).select('id'))
     await unwrap(db.from('assessment_options').insert(opts.map((o, i) => ({ question_id: nq.id, option_text: o, is_correct: i === right, sort_order: i + 1 })).filter((o) => o.option_text.trim())).select('id'))
   }, { success: 'Question added', invalidate: [['learning', 'qb', assessment.id], ['learning', 'qb-key', assessment.id]], onSuccess: () => { setQ(''); setOpts(['', '', '', '']); setRight(0) } })
+  const confirm = useConfirm()
   const del = useAction((id: string) => unwrap(db.from('assessment_questions').delete().eq('id', id).select('id')), { invalidate: [['learning', 'qb', assessment.id]] })
   return (
     <Drawer open onOpenChange={(o) => !o && onClose()} title={assessment.title} description="Questions and answer key">
       <ol className="space-y-3">{(qs.data ?? []).map((x, i) => (
-        <Card key={x.id} className="p-4"><div className="flex items-start justify-between gap-2"><p className="text-sm font-medium">{i + 1}. {x.question}</p><Button size="icon-sm" variant="ghost" aria-label="Delete question" onClick={() => del.mutate(x.id)}><Trash2 /></Button></div>
+        <Card key={x.id} className="p-4"><div className="flex items-start justify-between gap-2"><p className="text-sm font-medium">{i + 1}. {x.question}</p><Button size="icon-sm" variant="ghost" aria-label="Delete question" onClick={async () => { if ((await confirm({ title: 'Delete this question?', confirmLabel: 'Delete', danger: true })).ok) del.mutate(x.id) }}><Trash2 /></Button></div>
           <ul className="mt-2 space-y-1">{[...(x.assessment_options ?? [])].sort((a: any, b: any) => a.sort_order - b.sort_order).map((o: any) => <li key={o.id} className={cn('flex items-center gap-2 text-sm', correct.has(o.id) ? 'text-success' : 'text-muted')}>{correct.has(o.id) ? <CheckCircle2 className="h-4 w-4" /> : <Circle className="h-4 w-4" />}{o.option_text}</li>)}</ul></Card>
       ))}</ol>
       <Card className="mt-5 space-y-3 p-4">

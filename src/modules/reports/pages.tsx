@@ -1,3 +1,4 @@
+import { useConfirm } from '@/components/common/confirm'
 import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -143,6 +144,7 @@ export function CustomReports() {
   const [name, setName] = useState('')
   const saved = useQuery({ queryKey: ['reports', 'saved'], queryFn: () => unwrap<any[]>(db.from('saved_reports').select('*').order('created_at', { ascending: false })) })
   const save = useAction(() => unwrap(db.from('saved_reports').insert({ organisation_id: orgId, owner_id: userId, name, dataset: ds, config: { columns: sel } }).select('id')), { success: 'Report saved', invalidate: [['reports', 'saved']], onSuccess: () => setName('') })
+  const confirm = useConfirm()
   const del = useAction((id: string) => unwrap(db.from('saved_reports').delete().eq('id', id).select('id')), { invalidate: [['reports', 'saved']] })
   const pick = (k: string) => { setDs(k); setSel(DATASETS[k].columns.slice(0, 6).map((c) => c.key)) }
   const base = ['employees', 'attendance', 'leave', 'leave_balances', 'payroll', 'claims', 'performance', 'training', 'field', 'onboarding', 'offboarding']
@@ -159,7 +161,7 @@ export function CustomReports() {
           </Card>
           <Card><CardHeader title="Saved reports" />
             <ul className="divide-y divide-line">{(saved.data ?? []).map((s) => (
-              <li key={s.id} className="flex items-center justify-between gap-2 px-4 py-2 text-sm"><button className="text-left text-primary hover:underline" onClick={() => { setDs(s.dataset); setSel(s.config.columns) }}>{s.name}</button><Button size="icon-sm" variant="ghost" aria-label="Delete saved report" onClick={() => del.mutate(s.id)}><Trash2 /></Button></li>
+              <li key={s.id} className="flex items-center justify-between gap-2 px-4 py-2 text-sm"><button className="text-left text-primary hover:underline" onClick={() => { setDs(s.dataset); setSel(s.config.columns) }}>{s.name}</button><Button size="icon-sm" variant="ghost" aria-label="Delete saved report" onClick={async () => { if ((await confirm({ title: `Delete saved report “${s.name}”?`, confirmLabel: 'Delete', danger: true })).ok) del.mutate(s.id) }}><Trash2 /></Button></li>
             ))}{(saved.data ?? []).length === 0 && <li className="px-4 py-4 text-sm text-muted">None yet</li>}</ul>
           </Card>
         </div>
