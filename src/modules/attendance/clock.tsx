@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Field, Input, Select } from '@/components/ui/input'
 import { Badge, Card } from '@/components/ui/misc'
 import { Dialog } from '@/components/ui/dialog'
-import { cn, errorMessage, fmtTime, minutes } from '@/lib/utils'
+import { cn, errorMessage, fmtTime, isoDate, minutes } from '@/lib/utils'
 import { ConsentDialog } from '@/modules/self/consent'
 
 type Geo = { lat: number; lng: number; accuracy: number; status: 'ok' | 'denied' | 'unavailable' | 'low_accuracy' }
@@ -132,7 +132,7 @@ export function ClockPanel() {
           <div className="figure mt-1 text-5xl font-semibold tnum">{now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</div>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
             <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5', clockedIn ? 'bg-[#4ADE80]/20 text-[#86EFAC]' : 'bg-white/10 text-ink-muted')}>
-              <span className={cn('h-2 w-2 rounded-full', clockedIn ? 'bg-[#4ADE80]' : 'bg-ink-muted')} />{clockedIn ? `Working since ${fmtTime(h?.open_session?.occurred_at)}` : 'Not clocked in'}
+              <span className={cn('h-2 w-2 rounded-full', clockedIn ? 'bg-[#4ADE80]' : 'bg-ink-muted')} />{clockedIn ? `Working since ${fmtTime(h?.open_session?.occurred_at)}` : h?.open_session?.event_type === 'out' && isoDate(new Date(h.open_session.occurred_at)) === isoDate() ? `Clocked out at ${fmtTime(h.open_session.occurred_at)}` : 'Not clocked in'}
             </span>
             {h?.shift && <span className="text-ink-muted">Shift {fmtTime(h.shift.start_time)}–{fmtTime(h.shift.end_time)} · {h.shift.grace_minutes} min grace</span>}
           </div>
