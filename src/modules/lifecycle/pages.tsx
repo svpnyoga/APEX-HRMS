@@ -199,6 +199,8 @@ export function ResignDialog({ forOthers, selfId, onClose }: { forOthers?: boole
   )
 }
 
+const DEPT_LABEL: Record<string, string> = { hr: 'HR', it: 'IT', admin: 'Admin', finance: 'Finance', stores: 'Stores', reporting_manager: 'Reporting manager' }
+
 function OffboardingCase({ c, focus, onClose }: { c: any; focus?: string; onClose: () => void }) {
   const { can } = useAuth()
   const clr = useQuery({ queryKey: ['offboarding', 'clearance', c.id], queryFn: () => unwrap<any[]>(db.from('clearance_records').select('*').eq('case_id', c.id).order('department')) })
@@ -207,6 +209,7 @@ function OffboardingCase({ c, focus, onClose }: { c: any; focus?: string; onClos
   const update = useAction(({ id, status, dues, remarks }: any) => rpc('update_clearance', { p_id: id, p_status: status, p_dues: dues ?? 0, p_remarks: remarks ?? null }), { success: 'Clearance updated', invalidate: [['offboarding']] })
   const complete = useAction(() => rpc('complete_offboarding', { p_case: c.id }), { success: 'Exit completed and access revoked', invalidate: [['offboarding'], ['directory']], onSuccess: onClose })
   const confirm = useConfirm()
+  const [dues, setDues] = useState<{ id: string; dept: string; amount: string; note: string } | null>(null)
   const [iv, setIv] = useState<any>({ primary_reason: '', would_rejoin: false, would_recommend: false, rating_role: 3, rating_manager: 3, rating_culture: 3, rating_growth: 3, liked_most: '', improve: '' })
   const saveIv = useAction(() => unwrap(db.from('exit_interviews').upsert({ ...iv, case_id: c.id }, { onConflict: 'case_id' }).select('id')), { success: 'Exit interview saved', invalidate: [['offboarding', 'interview', c.id]] })
   const show = (s: string) => !focus || focus === s || (focus === 'checklist' && s === 'tasks') || (focus === 'handover' && s === 'tasks')
@@ -214,15 +217,26 @@ function OffboardingCase({ c, focus, onClose }: { c: any; focus?: string; onClos
     <Dialog open onOpenChange={(o) => !o && onClose()} title={`Exit · ${c.employee_name}`} description={`${c.reason} · last day ${fmtDate(c.key_date)}`} size="xl"
       footer={c.status === 'in_clearance' && can('offboarding.manage') && <Button variant="danger" loading={complete.isPending} onClick={async () => { if ((await confirm({ title: 'Complete exit?', description: 'The employee is marked exited and their login is deactivated. History is kept.', danger: true })).ok) complete.mutate() }}><LogOut /> Complete exit</Button>}>
       {c.status === 'pending_approval' && <MyRequestStatus entityType="resignation" entityId={c.id} />}
+      {dues && (
+        <Dialog open onOpenChange={(o) => !o && setDues(null)} title={`Record dues · ${dues.dept}`} size="sm"
+          footer={<><Button variant="secondary" onClick={() => setDues(null)}>Cancel</Button>
+            <Button disabled={!(Number(dues.amount) > 0) || !dues.note.trim()} loading={update.isPending}
+              onClick={() => update.mutate({ id: dues.id, status: 'dues_pending', dues: Number(dues.amount), remarks: dues.note.trim() }, { onSuccess: () => setDues(null) })}>Save dues</Button></>}>
+          <div className="space-y-4">
+            <Field label="Amount (₹)" required><Input type="number" min="0" step="0.01" value={dues.amount} onChange={(e) => setDues({ ...dues, amount: e.target.value })} autoFocus /></Field>
+            <Field label="What is owed" required><Textarea value={dues.note} onChange={(e) => setDues({ ...dues, note: e.target.value })} placeholder="e.g. Laptop charger not returned" /></Field>
+          </div>
+        </Dialog>
+      )}
       <div className="grid gap-5 lg:grid-cols-2">
         {show('tasks') && c.status !== 'pending_approval' && <Card><CardHeader title="Exit checklist" /><TaskList kind="offboarding" caseId={c.id} focus={focus === 'handover' ? 'handover' : undefined} /></Card>}
         {show('clearance') && c.status !== 'pending_approval' && (
           <Card><CardHeader title="Department clearance" />
             <ul className="divide-y divide-line">{(clr.data ?? []).map((r) => (
               <li key={r.id} className="flex items-center justify-between gap-2 px-5 py-2.5 text-sm">
-                <span>{titleCase(r.department)}{Number(r.dues_amount) > 0 && <span className="ml-1 text-xs text-danger">dues {money(r.dues_amount)}</span>}</span>
-                <span className="flex items-center gap-2"><StatusBadge status={r.status} />{r.status !== 'cleared' && <Button size="sm" variant="secondary" onClick={() => update.mutate({ id: r.id, status: 'cleared' })}>Clear</Button>}
-                  {r.status === 'pending' && <Button size="sm" variant="ghost" onClick={async () => { const x = await confirm({ title: 'Record dues', requireReason: true, reasonLabel: 'Amount and description' }); if (x.ok) update.mutate({ id: r.id, status: 'dues_pending', dues: Number((x.reason!.match(/[\d.]+/) ?? ['0'])[0]), remarks: x.reason }) }}>Dues</Button>}</span>
+                <span>{DEPT_LABEL[r.department] ?? titleCase(r.department)}{Number(r.dues_amount) > 0 && <span className="ml-1 text-xs text-danger">dues {money(r.dues_amount)}</span>}</span>
+                <span className="flex items-center gap-2"><StatusBadge status={r.status} />{r.status !== 'cleared' && <Button size="sm" variant="secondary" onClick={() => update.mutate({ id: r.id, status: 'cleared', dues: r.dues_amount, remarks: r.remarks })}>Clear</Button>}
+                  {r.status === 'pending' && <Button size="sm" variant="ghost" onClick={() => setDues({ id: r.id, dept: DEPT_LABEL[r.department] ?? titleCase(r.department), amount: '', note: '' })}>Dues</Button>}</span>
               </li>
             ))}</ul>
             <div className="border-t border-line px-5 py-3 text-sm"><span className="font-medium">Assets still issued:</span> {(assets.data ?? []).length === 0 ? <span className="text-success">none</span> : (assets.data ?? []).map((a) => a.asset_tag).join(', ')} <Link to="/offboarding/assets" className="ml-1 text-primary hover:underline">Manage</Link></div>
