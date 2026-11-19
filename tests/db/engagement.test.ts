@@ -59,3 +59,16 @@ describe('anonymous feedback', () => {
     expect(r[0].employee_id).toBeNull()
   })
 })
+
+describe('anonymous survey results', () => {
+  it('stay hidden from HR until at least 3 people have responded', async () => {
+    const org = (await db.query<any>(`select organisation_id o from employees limit 1`)).rows[0].o
+    const s = (await db.query<any>(`insert into surveys (organisation_id, title, is_anonymous, starts_on, ends_on, status) values ($1, 'Small pulse', true, current_date, current_date + 7, 'active') returning id`, [org])).rows[0].id
+    const q = (await db.query<any>(`insert into survey_questions (survey_id, question, question_type, sort_order) values ($1, 'OK?', 'yes_no', 1) returning id`, [s])).rows[0].id
+    const seen = () => asUser(db, USERS.hr, (x) => x<any>(`select a.answer_text from survey_answers a join survey_responses r on r.id = a.response_id where r.survey_id = $1`, [s]))
+    for (const u of [USERS.employee, USERS.manager]) await asUser(db, u, (x) => x(`select submit_survey($1, $2::jsonb)`, [s, JSON.stringify({ [q]: 'Yes' })]))
+    expect(await seen()).toHaveLength(0)
+    await asUser(db, USERS.field, (x) => x(`select submit_survey($1, $2::jsonb)`, [s, JSON.stringify({ [q]: 'No' })]))
+    expect(await seen()).toHaveLength(3)
+  })
+})

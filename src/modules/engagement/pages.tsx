@@ -289,7 +289,8 @@ function SurveyResults({ survey, onClose }: { survey: any; onClose: () => void }
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()} title={`Results · ${survey.title}`} description={`${resp.data ?? 0} responses`} size="lg">
       <div className="space-y-5">
-        {(qs.data ?? []).map((q) => {
+        {survey.is_anonymous && (resp.data ?? 0) < 3 && <EmptyState title="Results are hidden for now" description={`To keep this anonymous survey anonymous, answers appear once at least 3 people have responded (${resp.data ?? 0} so far).`} icon={Users} />}
+        {(!survey.is_anonymous || (resp.data ?? 0) >= 3) && (qs.data ?? []).map((q) => {
           const as = (ans.data ?? []).filter((a) => a.question_id === q.id)
           const counts = as.reduce<Record<string, number>>((m, a) => ({ ...m, [a.answer_text]: (m[a.answer_text] ?? 0) + 1 }), {})
           const avg = q.question_type === 'rating' && as.length ? (as.reduce((s, a) => s + Number(a.answer_number), 0) / as.length).toFixed(2) : null
