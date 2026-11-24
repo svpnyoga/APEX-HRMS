@@ -147,7 +147,7 @@ export function ClockPanel() {
           )}
           <Field label="Work site" hint={settings.gps_mode !== 'off' ? 'Location is recorded with your punch if you allow it. Missing GPS never blocks attendance.' : undefined}>
             <Select value={site} onChange={(e) => setSite(e.target.value)}>
-              <option value="">Not at a specific site</option>
+              <option value="">My usual workplace (office)</option>
               {assigned.length > 0 && <optgroup label="Assigned to you">{assigned.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</optgroup>}
               {sites.filter((s) => !s.assigned).length > 0 && <optgroup label="Other approved sites">{sites.filter((s) => !s.assigned).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</optgroup>}
               {settings.allow_new_site && <option value="__new">+ New site (needs HR approval)</option>}
