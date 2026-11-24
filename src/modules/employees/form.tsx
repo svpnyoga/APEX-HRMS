@@ -15,6 +15,7 @@ import { Switch } from '@/components/ui/misc'
 import { toast } from 'sonner'
 
 const schema = z.object({
+  employee_code: z.string().trim().max(30, 'Keep it under 30 characters').regex(/^[A-Za-z0-9/_-]*$/, 'Use letters, numbers, - / _ only').default(''),
   first_name: z.string().trim().min(1, 'First name is required'),
   last_name: z.string().trim().default(''),
   official_email: z.string().trim().email('Enter a valid email').or(z.literal('')),
@@ -42,7 +43,7 @@ export function EmployeeForm({ open, onOpenChange, employee, onSaved }: { open: 
   useEffect(() => {
     if (!open) return
     form.reset({
-      first_name: employee?.first_name ?? '', last_name: employee?.last_name ?? '', official_email: employee?.official_email ?? '', personal_email: employee?.personal_email ?? '',
+      employee_code: employee?.employee_code ?? '', first_name: employee?.first_name ?? '', last_name: employee?.last_name ?? '', official_email: employee?.official_email ?? '', personal_email: employee?.personal_email ?? '',
       mobile: employee?.mobile ?? '', date_of_birth: employee?.date_of_birth ?? '', gender: employee?.gender ?? '', address_line: employee?.address_line ?? '',
       city: employee?.city ?? '', state: employee?.state ?? 'Tamil Nadu', postal_code: employee?.postal_code ?? '',
       date_of_joining: employee?.date_of_joining ?? new Date().toISOString().slice(0, 10), probation_end_date: employee?.probation_end_date ?? '',
@@ -56,13 +57,15 @@ export function EmployeeForm({ open, onOpenChange, employee, onSaved }: { open: 
     const { invite, ...rest } = v
     const payload: Record<string, any> = Object.fromEntries(Object.entries(rest).map(([k, x]) => [k, typeof x === 'string' ? blank(x) : x]))
     payload.last_name = v.last_name ?? ''
+    if (!payload.employee_code) delete payload.employee_code      // blank: new → automatic ID; edit → keep the current one
     let id = employee?.id
-    if (employee) await unwrap(db.from('employees').update(payload).eq('id', employee.id).select('id'))
+    const taken = (err: unknown) => /duplicate|unique/i.test(String((err as Error)?.message)) ? new Error(`Employee ID ${v.employee_code} is already used by someone else`) : err
+    if (employee) await unwrap(db.from('employees').update(payload).eq('id', employee.id).select('id')).catch((err) => { throw taken(err) })
     else {
       // Generate the id here and skip RETURNING: the read-back policy (can_view_employee) runs against a
       // snapshot that does not contain the new row yet, so insert(...).select() is always rejected by RLS.
       id = crypto.randomUUID()
-      await unwrap(db.from('employees').insert({ ...payload, id, organisation_id: orgId }))
+      await unwrap(db.from('employees').insert({ ...payload, id, organisation_id: orgId })).catch((err) => { throw taken(err) })
     }
     if (invite) {
       try {
@@ -78,12 +81,14 @@ export function EmployeeForm({ open, onOpenChange, employee, onSaved }: { open: 
   const e = form.formState.errors
   const r = form.register
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} title={employee ? `Edit ${employee.first_name}` : 'New employee'} description={employee ? undefined : 'An employee ID is generated automatically.'} size="lg"
+    <Dialog open={open} onOpenChange={onOpenChange} title={employee ? `Edit ${employee.first_name}` : 'New employee'} description={employee ? undefined : 'Leave Employee ID blank to get the next one automatically.'} size="lg"
       footer={<><Button variant="secondary" onClick={() => onOpenChange(false)}>Cancel</Button><Button loading={save.isPending} onClick={form.handleSubmit((v) => save.mutate(v))}>{employee ? 'Save changes' : 'Create employee'}</Button></>}>
       <form onSubmit={form.handleSubmit((v) => save.mutate(v))} className="space-y-6">
         <section>
           <h4 className="mb-3 text-sm font-semibold">Personal</h4>
           <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Employee ID" error={e.employee_code?.message} hint={employee ? 'Change only if you need to; must be unique' : 'Blank = next automatic ID'}><Input {...r('employee_code')} placeholder={employee ? '' : 'Automatic'} aria-invalid={!!e.employee_code} /></Field>
+            <div className="hidden sm:block" />
             <Field label="First name" required error={e.first_name?.message}><Input {...r('first_name')} aria-invalid={!!e.first_name} /></Field>
             <Field label="Last name"><Input {...r('last_name')} /></Field>
             <Field label="Official email" error={e.official_email?.message}><Input type="email" {...r('official_email')} aria-invalid={!!e.official_email} /></Field>

@@ -9,7 +9,7 @@ import { useAuth, useMe } from '@/app/auth'
 import { useAction, useLookup } from '@/hooks/data'
 import { exportExcel, download } from '@/lib/export'
 import { DataTable, type Column } from '@/components/common/DataTable'
-import { PageHeader, QueryView, StatStrip } from '@/components/common/page'
+import { LoadingRows, PageHeader, QueryView, StatStrip } from '@/components/common/page'
 import { EmployeePicker } from '@/components/common/pickers'
 import { StatusBadge } from '@/components/common/status'
 import { CrudPage } from '@/components/crud/CrudPage'
@@ -200,7 +200,8 @@ export function CompanyPage() {
 export function OrganisationSettingsPage() {
   return (
     <div className="space-y-5">
-      <PageHeader title="Organisation settings" description="Locations and document types used across the system." />
+      <PageHeader title="Organisation settings" description="Employee IDs, locations and document types used across the system." />
+      <EmployeeCodeSettings />
       <CrudPage cfg={{ title: 'Locations', embedded: true, table: 'locations', permission: 'employees.manage', orderBy: { column: 'name' }, remove: { column: 'is_active', value: false },
         columns: [{ key: 'name', header: 'Location' }, { key: 'city', header: 'City' }, { key: 'state', header: 'State' }, { key: 'is_active', header: 'Active', value: (r) => (r.is_active ? 'Yes' : 'No') }],
         fields: [{ name: 'name', label: 'Name', type: 'text', required: true }, { name: 'address', label: 'Address', type: 'text', wide: true }, { name: 'city', label: 'City', type: 'text' }, { name: 'state', label: 'State', type: 'text' }, { name: 'is_active', label: 'Active', type: 'switch', default: true }] }} />
@@ -208,6 +209,44 @@ export function OrganisationSettingsPage() {
         columns: [{ key: 'name', header: 'Document type' }, { key: 'is_mandatory_onboarding', header: 'Required at onboarding', value: (r) => (r.is_mandatory_onboarding ? 'Yes' : 'No') }],
         fields: [{ name: 'name', label: 'Name', type: 'text', required: true }, { name: 'is_mandatory_onboarding', label: 'Required at onboarding', type: 'switch' }] }} />
     </div>
+  )
+}
+
+function EmployeeCodeSettings() {
+  const { access, can } = useAuth()
+  const confirm = useConfirm()
+  const cs = useQuery({ queryKey: ['company-settings', 'employee-codes'], queryFn: () => unwrap<any>(db.from('company_settings').select('employee_code_prefix, employee_code_digits, employee_code_next').eq('organisation_id', access!.organisation_id).single()) })
+  const [v, setV] = useState<{ prefix: string; digits: number; next: number } | null>(null)
+  const cur = v ?? (cs.data ? { prefix: cs.data.employee_code_prefix, digits: cs.data.employee_code_digits, next: cs.data.employee_code_next } : null)
+  const fmt = (n: number) => cur ? cur.prefix + (String(n).length >= cur.digits ? String(n) : String(n).padStart(cur.digits, '0')) : ''
+  const valid = !!cur && /^[A-Za-z0-9/_-]*$/.test(cur.prefix) && cur.digits >= 1 && cur.digits <= 8 && cur.next >= 0
+  const save = useAction(() => unwrap(db.from('company_settings').update({ employee_code_prefix: cur!.prefix.trim(), employee_code_digits: cur!.digits, employee_code_next: cur!.next }).eq('organisation_id', access!.organisation_id).select('organisation_id')),
+    { success: 'Employee ID format saved', invalidate: [['company-settings']], onSuccess: () => setV(null) })
+  const renumber = useAction(() => rpc<number>('renumber_employee_codes', { p_prefix: cur!.prefix.trim(), p_digits: cur!.digits, p_start: cur!.next }),
+    { invalidate: [['company-settings'], ['employees'], ['lookup']], onSuccess: (n) => { setV(null); toast.success(`${n} employees renumbered`) } })
+  const editable = can('employees.manage')
+  return (
+    <Card>
+      <CardHeader title="Employee IDs" description="Format for new employee IDs. Each employee's ID can also be edited on their profile." />
+      {!cur ? <div className="p-5"><LoadingRows rows={2} /></div> : (
+        <div className="space-y-4 p-5">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Field label="Prefix" hint="e.g. AIM, EMP, or blank"><Input value={cur.prefix} disabled={!editable} onChange={(x) => setV({ ...cur, prefix: x.target.value.toUpperCase() })} /></Field>
+            <Field label="Number of digits" hint="3 → 001, 4 → 0001"><Input type="number" min={1} max={8} value={cur.digits} disabled={!editable} onChange={(x) => setV({ ...cur, digits: Number(x.target.value) })} /></Field>
+            <Field label="Next number" hint="Used for the next new employee"><Input type="number" min={0} value={cur.next} disabled={!editable} onChange={(x) => setV({ ...cur, next: Number(x.target.value) })} /></Field>
+          </div>
+          <p className="text-sm text-muted">Next new employee gets <b className="text-fg">{fmt(cur.next)}</b>, then {fmt(cur.next + 1)}, {fmt(cur.next + 2)}…</p>
+          {editable && (
+            <div className="flex flex-wrap gap-2">
+              <Button disabled={!valid || !v} loading={save.isPending} onClick={() => save.mutate()}><Save /> Save format</Button>
+              <Button variant="secondary" disabled={!valid} loading={renumber.isPending} onClick={async () => {
+                if ((await confirm({ title: `Renumber all current employees from ${fmt(cur.next)}?`, description: `Every current employee gets a new ID in this format, in order of joining date (${fmt(cur.next)}, ${fmt(cur.next + 1)}, …). Payslips already issued keep their old numbers. Exited employees keep their IDs.`, confirmLabel: 'Renumber', danger: true })).ok) renumber.mutate()
+              }}>Renumber all current employees</Button>
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
   )
 }
 
