@@ -97,6 +97,13 @@ function Home() {
   return <Navigate to="/me" replace />
 }
 
+/** Employees with only self-service access always stay in their own portal: any HR/admin address sends them to /me. */
+function StaffOnly() {
+  const { access } = useAuth()
+  if (access && isSelfServiceOnly(access.permissions) && !access.is_manager) return <Navigate to="/me" replace />
+  return <AppShell />
+}
+
 function ReportRoute() { const { report } = useParams(); return <P.ReportView key={report} reportKey={report} /> }
 
 /** Signs out after the configured inactivity period. */
@@ -292,7 +299,7 @@ export default function App() {
                 <Route element={<RequireAuth />}>
                   <Route path="/" element={<Home />} />
                   <Route element={<EssShell />}>{ESS_ROUTES.map((r) => <Route key={r.path} path={r.path} element={<Suspense fallback={<Loading />}>{r.element}</Suspense>} />)}</Route>
-                  <Route element={<AppShell />}>
+                  <Route element={<StaffOnly />}>
                     {ROUTES.map((r) => <Route key={r.path} path={r.path} element={<Suspense fallback={<Loading />}>{r.element}</Suspense>} />)}
                     <Route path="*" element={<EmptyState title="Page not found" description="The link may be out of date." />} />
                   </Route>
