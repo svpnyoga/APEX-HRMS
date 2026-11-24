@@ -100,9 +100,20 @@ function Home() {
 /** Employees with only self-service access always stay in their own portal: any HR/admin address sends them to /me. */
 function StaffOnly() {
   const { access } = useAuth()
-  if (access && isSelfServiceOnly(access.permissions) && !access.is_manager) return <Navigate to="/me" replace />
+  const loc = useLocation()
+  if (access && isSelfServiceOnly(access.permissions) && !access.is_manager) return <Navigate to={essEquivalent(loc.pathname)} replace />
   return <AppShell />
 }
+
+/** The employee-portal page that matches an HR-portal address (e.g. a link in a notification). */
+const ESS_EQUIVALENT: [string, string][] = [
+  ['/notifications', '/me/notifications'],
+  ['/engagement/announcements', '/me/announcements'], ['/engagement/news', '/me/announcements'], ['/engagement/policies', '/me/announcements'],
+  ['/engagement', '/me/community'],
+  ['/leave', '/me/leave'], ['/claims', '/me/claims'], ['/attendance', '/me/attendance'], ['/payroll/payslips', '/me/payslips'],
+  ['/learning', '/me/learning'], ['/performance', '/me/performance'], ['/offboarding', '/me/resignation'], ['/approvals', '/me/approvals'],
+]
+export const essEquivalent = (path: string) => ESS_EQUIVALENT.find(([from]) => path === from || path.startsWith(from + '/'))?.[1] ?? '/me'
 
 function ReportRoute() { const { report } = useParams(); return <P.ReportView key={report} reportKey={report} /> }
 
@@ -270,7 +281,7 @@ export const ROUTES: { path: string; element: ReactNode }[] = [
 const ESS_ROUTES: { path: string; element: ReactNode }[] = [
   { path: '/me', element: mine(<P.EssHome />) }, { path: '/me/attendance', element: mine(<P.EssAttendance />) }, { path: '/me/leave', element: mine(<P.EssLeave />) },
   { path: '/me/claims', element: mine(<P.EssClaims />) }, { path: '/me/payslips', element: mine(<P.EssPayslips />) }, { path: '/me/learning', element: mine(<P.EssLearning />) },
-  { path: '/me/performance', element: mine(<P.EssPerformance />) }, { path: '/me/announcements', element: <P.MyAnnouncements /> }, { path: '/me/community', element: <P.EssCommunity /> }, { path: '/me/approvals', element: <P.EssApprovals /> },
+  { path: '/me/performance', element: mine(<P.EssPerformance />) }, { path: '/me/announcements', element: <P.MyAnnouncements /> }, { path: '/me/community', element: <P.EssCommunity /> }, { path: '/me/notifications', element: <P.NotificationsPage /> }, { path: '/me/approvals', element: <P.EssApprovals /> },
   { path: '/me/profile', element: mine(<P.EssProfile />) }, { path: '/me/resignation', element: mine(<P.EssResignation />) },
 ]
 
