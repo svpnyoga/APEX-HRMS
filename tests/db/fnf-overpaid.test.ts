@@ -27,6 +27,17 @@ describe('final month already paid by payroll', () => {
     expect(l.find((x: any) => x.title === 'Salary for final month')).toBeFalsy()          // not paid twice
     const rec = l.find((x: any) => x.title === 'Salary paid beyond last working day')
     expect(rec?.line_type).toBe('deduction')
-    expect(rec.amount).toBe(Math.round((pe.net * (pe.p - 10)) / pe.p))
+    // independent check (calendar-day basis): paid days after the 10th = days 11..end, minus LOP already after the 10th
+    const { after } = (await db.query<any>(`select ((date_trunc('month', $1::date) + interval '1 month - 1 day')::date - $1::date)
+        - coalesce((select sum(case when status = 'absent' then 1 when status = 'half_day' and leave_application_id is null then 0.5 else 0 end)
+                    from attendance_records where employee_id = $2 and work_date > $1::date
+                      and work_date <= (date_trunc('month', $1::date) + interval '1 month - 1 day')::date), 0)
+        - coalesce((select sum(count_leave_days($2, greatest(la.start_date, $1::date + 1), least(la.end_date, (date_trunc('month', $1::date) + interval '1 month - 1 day')::date), la.is_half_day))
+                    from leave_applications la join leave_types lt on lt.id = la.leave_type_id
+                    where la.employee_id = $2 and la.status = 'approved' and not lt.is_paid and la.end_date > $1::date
+                      and la.start_date <= (date_trunc('month', $1::date) + interval '1 month - 1 day')::date), 0) as after`, [lwd, EMP])).rows[0]
+    const over = Math.min(Number(pe.p), Number(after))
+    expect(rec.amount).toBe(Math.round((pe.net * over) / Number(pe.p)))
+    expect(rec.basis).toMatch(new RegExp(`^${String(over).replace('.', '\\.')} of `))   // half days kept, not rounded
   })
 })
