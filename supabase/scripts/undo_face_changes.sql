@@ -1,7 +1,9 @@
--- UNDO the SFace face-model switch (migration 20261126000300_face_model_sface.sql).
--- Run this ONLY if you already ran that migration. Safe to run once; puts everything back as it was.
--- Afterwards everyone's old face enrolment works again (anyone who re-enrolled with SFace gets their
--- previous enrolment back).
+-- UNDO the face changes made after self-enrolment:
+--   * 20261126000300_face_model_sface.sql   (SFace model)
+--   * 20261126000200_faster_face_clock.sql  (fast clock-in switches)
+-- Keeps 20261126000100_face_self_enrolment.sql (employees enrol themselves; re-enrol needs HR approval).
+-- Safe to run whether or not those two migrations were run. Afterwards every employee's previous
+-- face enrolment works again (anyone who re-enrolled with SFace gets their earlier enrolment back).
 
 -- 1. old scoring and the old model as the company setting
 create or replace function public.face_similarity(p_model text, a vector, b vector) returns double precision
@@ -137,3 +139,75 @@ begin
   end loop;
   return jsonb_build_object('samples', v_n, 'reenrolment', v_req is not null);
 end $$;
+
+
+-- 4. undo the fast clock-in changes: original face_clock and my_home, then drop the switches
+create or replace function public.face_clock(
+  p_embedding text, p_model text, p_antispoof numeric, p_liveness numeric, p_challenge_passed boolean, p_quality numeric,
+  p_event_type text default 'auto', p_site_id uuid default null, p_new_site_name text default null,
+  p_lat double precision default null, p_lng double precision default null, p_accuracy double precision default null,
+  p_gps_status text default null, p_client_event_id text default null, p_occurred_at timestamptz default null, p_offline boolean default false
+) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare v_emp uuid := public.current_employee_id(); v_eval jsonb; v_event jsonb;
+begin
+  if v_emp is null then raise exception 'Your login is not linked to an employee record'; end if;
+  if not public.has_permission('attendance.clock') then raise exception 'Not authorised to record attendance' using errcode = '42501'; end if;
+  -- idempotent replay of an already-synced offline punch
+  if p_client_event_id is not null and exists (select 1 from public.attendance_events where employee_id = v_emp and client_event_id = p_client_event_id) then
+    return jsonb_build_object('outcome','matched','duplicate',true);
+  end if;
+  v_eval := public._face_evaluate(v_emp, p_embedding::vector, p_model, p_antispoof, p_liveness, p_challenge_passed, p_quality, 'verify', null);
+  if v_eval->>'outcome' <> 'matched' then return v_eval; end if;
+  v_event := public._record_attendance_event(v_emp, p_event_type, 'face', case when p_offline then 'offline_sync' else 'online' end,
+     p_occurred_at, p_site_id, p_new_site_name, p_lat, p_lng, p_accuracy, p_gps_status, p_client_event_id,
+     (v_eval->>'attempt_id')::uuid, null, null);
+  return v_eval || v_event;
+end $$;
+
+create or replace function public.my_home() returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare v_emp uuid := public.current_employee_id(); v_org uuid := public.current_org_id(); v_year int;
+begin
+  if v_emp is null then return null; end if;
+  v_year := public.leave_year_of(v_org, current_date);
+  return jsonb_build_object(
+    'today', (select row_to_json(r) from public.attendance_records r where employee_id = v_emp and work_date = (now() at time zone public.org_timezone(v_org))::date),
+    'open_session', (select row_to_json(x) from (select event_type, occurred_at, site_id from public.attendance_events where employee_id = v_emp order by occurred_at desc limit 1) x),
+    'shift', (select row_to_json(s) from public.employee_shift(v_emp, current_date) s),
+    'balances', (select coalesce(jsonb_agg(jsonb_build_object('leave_type_id', lt.id, 'name', lt.name, 'code', lt.code, 'color', lt.color,
+                    'balance', coalesce(lb.balance, 0), 'available', public.leave_available(v_emp, lt.id, v_year), 'used', coalesce(lb.used,0),
+                    'accrues', exists (select 1 from public.leave_policies lp where lp.leave_type_id = lt.id and lp.is_active and lp.accrual_frequency <> 'none')) order by lt.name), '[]')
+                 from public.leave_types lt left join public.leave_balances lb on lb.leave_type_id = lt.id and lb.employee_id = v_emp and lb.leave_year = v_year
+                 join public.employees me on me.id = v_emp
+                 where lt.organisation_id = v_org and lt.is_active and lt.requires_balance
+                   and (lt.gender_restriction is null or lt.gender_restriction = me.gender)),
+    'latest_payslip', (select row_to_json(x) from (select ps.id, ps.period_month, pe.net_pay, pe.gross_earnings from public.payslips ps join public.payroll_entries pe on pe.id = ps.entry_id
+                        where ps.employee_id = v_emp order by ps.period_month desc limit 1) x),
+    'claims', (select jsonb_build_object('pending', count(*) filter (where status = 'submitted'), 'approved', count(*) filter (where status = 'approved'),
+                 'pending_amount', coalesce(sum(amount) filter (where status in ('submitted','approved')), 0)) from public.expense_claims where employee_id = v_emp),
+    'pending_tasks', (select count(*) from public.approval_tasks where approver_user_id = auth.uid() and status = 'pending')
+                   + (select count(*) from public.onboarding_tasks t join public.onboarding_cases c on c.id = t.case_id where c.employee_id = v_emp and t.owner_role = 'employee' and t.status = 'pending')
+                   + (select count(*) from public.appraisal_reviews where employee_id = v_emp and stage = 'self' and status = 'pending'),
+    'learning', (select jsonb_build_object('enrolled', count(*), 'completed', count(*) filter (where status = 'completed'), 'avg_progress', coalesce(round(avg(progress)),0),
+                   'due_soon', count(*) filter (where status not in ('completed','withdrawn') and due_date <= current_date + 7)) from public.course_enrolments where employee_id = v_emp),
+    'holidays', (select coalesce(jsonb_agg(jsonb_build_object('date', holiday_date, 'name', name, 'type', holiday_type) order by holiday_date), '[]') from (
+                   select * from public.holidays where organisation_id = v_org and holiday_date >= current_date order by holiday_date limit 5) h),
+    'face', (select jsonb_build_object('status', coalesce((select status from public.face_enrolments where employee_id = v_emp), 'not_enrolled'),
+                                        'consent', public.has_consent(v_emp, 'biometric'), 'location_consent', public.has_consent(v_emp, 'location'))),
+    'settings', (select jsonb_build_object('face_required', cs.face_recognition_enabled and cs.face_required_for_clock, 'face_enabled', cs.face_recognition_enabled,
+                    'gps_mode', cs.gps_mode, 'allow_new_site', cs.allow_new_site_entry, 'match_threshold', cs.face_match_threshold,
+                    'antispoof_threshold', cs.face_antispoof_threshold, 'liveness_threshold', cs.face_liveness_threshold, 'face_provider', cs.face_provider,
+                    'min_samples', cs.face_min_samples)
+                 from public.company_settings cs where cs.organisation_id = v_org),
+    'sites', (select coalesce(jsonb_agg(jsonb_build_object('id', s.id, 'name', s.name, 'latitude', s.latitude, 'longitude', s.longitude, 'radius_m', s.radius_m,
+                 'assigned', exists (select 1 from public.employee_site_assignments a where a.site_id = s.id and a.employee_id = v_emp and (a.valid_to is null or a.valid_to >= current_date)),
+                 'primary', exists (select 1 from public.employee_site_assignments a where a.site_id = s.id and a.employee_id = v_emp and a.is_primary)) order by s.name), '[]')
+              from public.work_sites s where s.organisation_id = v_org and s.is_active and s.is_approved)
+  );
+end $$;
+
+drop function if exists public._face_in_office(uuid, uuid, double precision, double precision, double precision, text);
+alter table public.company_settings
+  drop column if exists face_preload_models, drop column if exists face_single_challenge,
+  drop column if exists face_easy_turn, drop column if exists face_skip_challenge_in_office;
