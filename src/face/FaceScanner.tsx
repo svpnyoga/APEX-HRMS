@@ -38,7 +38,7 @@ const ENROL_POSES = [
 
 const TIMEOUT_MS = 60_000
 
-export function FaceScanner({ mode, providerId, thresholds = { antispoof: 0.5, liveness: 0.5 }, samples = 5, onVerify, onEnrol, autoStart = true, compact, resultLabel, liveness }: Props) {
+export function FaceScanner({ mode, providerId = 'human-faceres-v1', thresholds = { antispoof: 0.5, liveness: 0.5 }, samples = 5, onVerify, onEnrol, autoStart = true, compact, resultLabel, liveness }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const livenessRef = useRef(liveness)
   livenessRef.current = liveness
