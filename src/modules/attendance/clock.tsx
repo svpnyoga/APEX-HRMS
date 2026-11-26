@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { useCallback, useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -92,7 +93,7 @@ export function ClockPanel() {
       if (capture && r.outcome !== 'matched') {
         const why: Record<string, string> = {
           no_match: 'Face did not match your enrolled profile.', spoof_suspected: 'This looked like a photo or screen. Use your live face.',
-          liveness_failed: 'Liveness check not passed. Please try again.', not_enrolled: 'Your face is not enrolled yet. Ask HR to enrol you.',
+          liveness_failed: 'Liveness check not passed. Please try again.', not_enrolled: 'Your face is not enrolled yet. Enrol it from My profile › Face attendance.',
           rate_limited: 'Too many attempts. Please wait or ask HR for manual attendance.', no_consent: 'Biometric consent is needed first.',
         }
         setResult({ tone: 'danger', text: why[r.outcome] ?? 'Verification failed.' })
@@ -162,7 +163,7 @@ export function ClockPanel() {
               <Button className="mt-3" onClick={() => setConsentOpen(true)}><ShieldCheck /> Review and consent</Button>
             </div>
           ) : notEnrolled ? (
-            <div className="rounded-lg border border-line p-4 text-sm"><p className="font-medium">Face not enrolled</p><p className="mt-1 text-muted">HR enrols your face once, in person, using several samples. Until then, ask HR for manual attendance.</p></div>
+            <div className="rounded-lg border border-line p-4 text-sm"><p className="font-medium">Face not enrolled</p><p className="mt-1 text-muted">Enrol your face from <Link to="/me/profile" className="text-primary underline">My profile › Face attendance</Link> (with HR present the first time). Until then, ask HR for manual attendance.</p></div>
           ) : (
             <Button size="lg" className="w-full" variant={clockedIn ? 'secondary' : 'primary'} loading={busy}
               disabled={site === '__new' && !newSite.trim()}

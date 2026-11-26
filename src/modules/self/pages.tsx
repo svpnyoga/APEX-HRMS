@@ -21,6 +21,7 @@ import { MyClaimsPage } from '@/modules/claims/pages'
 import { PayslipsPage } from '@/modules/payroll/pages'
 import { MyLearning } from '@/modules/learning/pages'
 import { GoalsPage, AppraisalHistoryPage, ReviewStagePage } from '@/modules/performance/pages'
+import { FaceSelfCard } from './face-self'
 import { ApprovalsInbox, MyRequestStatus } from '@/modules/approvals/Inbox'
 import { DocumentsList } from '@/modules/employees/pages'
 import { VisitControl, VisitsPage } from '@/modules/field/pages'
@@ -137,6 +138,7 @@ export function EssProfile() {
         <Avatar name={profile?.full_name} src={e?.photo_url} size={64} />
         <div><div className="text-lg font-semibold">{profile?.full_name}</div><div className="text-sm text-muted">{e?.designations?.name} · {e?.departments?.name}</div><div className="mt-1 text-xs text-subtle">{e?.employee_code} · joined {fmtDate(e?.date_of_joining)} · reports to {e?.manager ? `${e.manager.first_name} ${e.manager.last_name}` : '—'}</div></div>
       </Card>
+      <FaceSelfCard consent={!!home.data?.face?.consent} onNeedConsent={() => setConsent('biometric')} />
       <Card><CardHeader title="Privacy & consent" description="You can change these at any time. Withdrawing biometric consent deletes your face templates immediately." />
         <div className="divide-y divide-line">
           {(['biometric', 'location'] as const).map((t) => { const on = t === 'biometric' ? home.data?.face?.consent : home.data?.face?.location_consent; return (

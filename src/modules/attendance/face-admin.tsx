@@ -12,6 +12,7 @@ import { StatusBadge } from '@/components/common/status'
 import { useConfirm } from '@/components/common/confirm'
 import { Button } from '@/components/ui/button'
 import { Dialog } from '@/components/ui/dialog'
+import { Field, Textarea } from '@/components/ui/input'
 import { Badge, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/misc'
 import { ConsentDialog } from '@/modules/self/consent'
 import { fmtDateTime, titleCase } from '@/lib/utils'
@@ -23,6 +24,11 @@ export function FaceAdmin() {
   const enrol = useQuery({ queryKey: ['face-admin', 'enrolments'], queryFn: () => unwrap<any[]>(db.from('face_enrolments').select('*')) })
   const consents = useQuery({ queryKey: ['face-admin', 'consents'], queryFn: () => unwrap<any[]>(db.from('data_consents').select('employee_id, consent_type, granted, granted_at, revoked_at').eq('consent_type', 'biometric').order('granted_at', { ascending: false })) })
   const attempts = useQuery({ queryKey: ['face-admin', 'attempts'], queryFn: () => unwrap<any[]>(db.from('face_recognition_attempts').select('*').order('created_at', { ascending: false }).limit(500)) })
+  const requests = useQuery({ queryKey: ['face-admin', 'reenrol-requests'], queryFn: () => unwrap<any[]>(db.from('face_reenrol_requests').select('*').order('requested_at', { ascending: false }).limit(300)) })
+  const [rejectFor, setRejectFor] = useState<any | null>(null)
+  const [rejectReason, setRejectReason] = useState('')
+  const decide = useAction((v: { id: string; approve: boolean; comment?: string }) => rpc('decide_face_reenrol', { p_request: v.id, p_approve: v.approve, p_comment: v.comment ?? null }),
+    { success: 'Decision sent to the employee', invalidate: [['face-admin']], onSuccess: () => { setRejectFor(null); setRejectReason('') } })
   const [enrolFor, setEnrolFor] = useState<any | null>(null)
   const [testFor, setTestFor] = useState<any | null>(null)
   const [consentFor, setConsentFor] = useState<any | null>(null)
@@ -89,14 +95,28 @@ export function FaceAdmin() {
         actions={<Link to="/admin/integrations"><Button variant="secondary"><Settings2 /> Thresholds & provider</Button></Link>} />
       <StatStrip items={[
         { label: 'Enrolled', value: `${enrolled}/${rows.length}`, tone: 'primary' },
+        { label: 'Re-enrol requests', value: (requests.data ?? []).filter((r) => r.status === 'pending').length, tone: 'warning' },
         { label: 'Match threshold', value: s?.face_match_threshold ?? '—', hint: 'Mean of top-3 template similarities' },
         { label: 'Anti-spoof / liveness', value: s ? `${s.face_antispoof_threshold} / ${s.face_liveness_threshold}` : '—' },
         { label: 'Attempts today', value: today.length },
         { label: 'Failed today', value: today.filter((a) => a.outcome !== 'matched').length, tone: 'danger' },
       ]} />
       <Tabs defaultValue="people">
-        <TabsList><TabsTrigger value="people">Enrolment</TabsTrigger><TabsTrigger value="log">Recognition log</TabsTrigger></TabsList>
+        <TabsList><TabsTrigger value="people">Enrolment</TabsTrigger><TabsTrigger value="requests">Re-enrolment requests{(requests.data ?? []).some((r) => r.status === 'pending') ? ` (${requests.data!.filter((r) => r.status === 'pending').length})` : ''}</TabsTrigger><TabsTrigger value="log">Recognition log</TabsTrigger></TabsList>
         <TabsContent value="people"><DataTable rows={rows} columns={cols} loading={dir.isLoading || enrol.isLoading} exportName="Face enrolment status" /></TabsContent>
+        <TabsContent value="requests">
+          <DataTable rows={requests.data} loading={requests.isLoading} error={requests.error} exportName="Face re-enrolment requests" emptyTitle="No re-enrolment requests"
+            columns={[
+              { key: 'employee', header: 'Employee', value: (r: any) => names.get(r.employee_id)?.full_name ?? '—', cell: (r: any) => { const d = names.get(r.employee_id); return <EmployeeCell name={d?.full_name} photo={d?.photo_url} sub={d?.employee_code} /> } },
+              { key: 'reason', header: 'Reason' },
+              { key: 'requested_at', header: 'Requested', value: (r: any) => r.requested_at, cell: (r: any) => fmtDateTime(r.requested_at), hideOnMobile: true },
+              { key: 'status', header: 'Status', value: (r: any) => r.status, cell: (r: any) => <div><StatusBadge status={r.status} />{r.decision_comment && <p className="mt-1 max-w-[16rem] whitespace-normal text-xs text-muted">{r.decision_comment}</p>}</div> },
+              { key: 'act', header: '', cell: (r: any) => r.status === 'pending' ? <div className="flex justify-end gap-2">
+                  <Button size="sm" loading={decide.isPending} onClick={() => decide.mutate({ id: r.id, approve: true })}>Approve</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setRejectFor(r)}>Reject</Button></div> : null },
+            ] as Column<any>[]} />
+          <p className="mt-2 px-1 text-xs text-muted">Approving lets the employee re-enrol once, on their own phone. Employees enrol themselves the first time from My profile › Face attendance — be present when they do.</p>
+        </TabsContent>
         <TabsContent value="log"><DataTable rows={attempts.data} columns={attemptCols} loading={attempts.isLoading} error={attempts.error} exportName="Face recognition attempts" /></TabsContent>
       </Tabs>
 
@@ -106,6 +126,10 @@ export function FaceAdmin() {
       </Dialog>
       <Dialog open={!!testFor} onOpenChange={(o) => !o && setTestFor(null)} title={`Test match · ${testFor?.full_name ?? ''}`} description="Runs the full liveness check and reports the similarity score without recording attendance. Use this to calibrate the threshold.">
         {testFor && <FaceScanner mode="verify" onVerify={onTest} resultLabel={testResult} />}
+      </Dialog>
+      <Dialog open={!!rejectFor} onOpenChange={(o) => !o && setRejectFor(null)} title={`Reject request · ${names.get(rejectFor?.employee_id)?.full_name ?? ''}`} description="The employee will see this reason."
+        footer={<Button variant="danger" disabled={!rejectReason.trim()} loading={decide.isPending} onClick={() => decide.mutate({ id: rejectFor.id, approve: false, comment: rejectReason })}>Reject</Button>}>
+        <Field label="Reason" required><Textarea rows={3} value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="e.g. Please come to the office so HR can be present" /></Field>
       </Dialog>
       {consentFor && <ConsentDialog open={!!consentFor} onOpenChange={(o) => !o && setConsentFor(null)} type="biometric" employeeId={consentFor.id} onDone={() => consents.refetch()} />}
     </div>
