@@ -41,10 +41,6 @@ export const SECTIONS: Record<string, { title: string; description: string; fiel
     { key: 'face_match_threshold', label: 'Match threshold (0–1)', type: 'number', step: '0.01', hint: 'Mean of top-3 template similarities must reach this. Default 0.60' },
     { key: 'face_antispoof_threshold', label: 'Anti-spoofing threshold', type: 'number', step: '0.01' }, { key: 'face_liveness_threshold', label: 'Liveness threshold', type: 'number', step: '0.01' },
     { key: 'face_min_samples', label: 'Samples required at enrolment', type: 'number', min: 3, max: 10 }, { key: 'face_max_attempts_per_hour', label: 'Failed attempts allowed per hour', type: 'number', min: 3 },
-    { key: 'face_preload_models', label: 'Faster: load face models when the app opens', type: 'switch', hint: 'The first clock-in of the day starts without waiting for models to download' },
-    { key: 'face_single_challenge', label: 'Faster: one random check (blink OR head turn) instead of both', type: 'switch', hint: 'Off = blink AND head turn on every punch' },
-    { key: 'face_easy_turn', label: 'Faster: smaller head turn, one side only', type: 'switch' },
-    { key: 'face_skip_challenge_in_office', label: 'Skip blink/turn when clocking in inside the office radius', type: 'switch', hint: 'Only for live punches with good GPS at an office site — checked by the server. Outside the office the check is always done.' },
     { key: 'biometric_retention_days', label: 'Delete templates this many days after exit', type: 'number' }, { key: 'recognition_log_retention_days', label: 'Keep recognition logs (days)', type: 'number' },
   ] },
   gps: { title: 'GPS & tracking', description: 'Location never blocks attendance. Tracking pings are accepted only between the start and end times.', fields: [

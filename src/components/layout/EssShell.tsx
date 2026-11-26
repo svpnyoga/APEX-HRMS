@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import { useRpc } from '@/hooks/data'
-import { usePreloadFace } from '@/face/preload'
 import { CalendarDays, Clock, Home, Receipt, Wallet, GraduationCap, Target, Megaphone, UserMinus, Inbox, User, Users, MoreHorizontal } from 'lucide-react'
 import { useAuth } from '@/app/auth'
 import { cn } from '@/lib/utils'
@@ -32,10 +30,6 @@ export function EssShell() {
   useEffect(() => setMore(false), [loc.pathname])
   const extra = items.filter((i) => !MOBILE.includes(i.to))
   const inMore = extra.some((i) => loc.pathname.startsWith(i.to))
-  // A: load the face models in the background for enrolled employees, so clock-in starts instantly
-  const home = useRpc<any>(['my-home'], 'my_home', undefined, !!access?.employee_id)
-  const hs = home.data?.settings
-  usePreloadFace(!!(hs?.face_enabled && hs?.face_preload && home.data?.face?.status === 'enrolled'), hs?.face_provider)
   return (
     <div className="flex h-full flex-col">
       <header className="sticky top-0 z-30 border-b border-ink-line bg-ink text-white">

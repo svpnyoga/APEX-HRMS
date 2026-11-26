@@ -13,16 +13,9 @@ export class HumanFaceProvider implements FaceProvider {
   readonly modelId = 'human-faceres-v1'
   readonly label = 'Human · FaceRes + anti-spoof + liveness (on-device)'
   private human: HumanType | null = null
-  private ready: Promise<void> | null = null
 
-  /** Loads once; callers arriving while it is loading (e.g. a scan started during the background preload) share it. */
-  load(onProgress?: (msg: string) => void): Promise<void> {
-    if (!this.ready) this.ready = this.doLoad(onProgress).catch((e) => { this.ready = null; this.human = null; throw e })
-    else onProgress?.('Loading face models…')
-    return this.ready
-  }
-
-  private async doLoad(onProgress?: (msg: string) => void) {
+  async load(onProgress?: (msg: string) => void) {
+    if (this.human) return
     onProgress?.('Loading face models…')
     const { Human } = await import('@vladmandic/human')
     const base = (import.meta.env.VITE_FACE_MODEL_BASE as string | undefined) || '/models/'

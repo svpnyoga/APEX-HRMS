@@ -17,22 +17,16 @@ export type ChallengeState = {
   turnedA: boolean             // turned one way
   turnedB: boolean             // and the other way
   startedAt: number
-  easyTurn: boolean            // one side only, smaller angle
 }
-
-/** Faster options (HR switches): one random challenge instead of two; an easier head turn. */
-export type ChallengeOptions = { single?: boolean; easyTurn?: boolean }
 
 export const CHALLENGE_TEXT: Record<ChallengeKind, string> = {
   blink: 'Blink slowly',
   turn: 'Turn your head slowly to one side, then the other',
 }
-export const challengeText = (s: ChallengeState, k: ChallengeKind) => (k === 'turn' && s.easyTurn ? 'Turn your head a little to one side, then back' : CHALLENGE_TEXT[k])
 
-export function newChallenge(opts: ChallengeOptions = {}, rnd = Math.random()): ChallengeState {
-  const pair: ChallengeKind[] = rnd < 0.5 ? ['blink', 'turn'] : ['turn', 'blink']
-  const sequence = opts.single ? pair.slice(0, 1) : pair                    // still random which one is asked
-  return { sequence, index: 0, done: false, baselineEar: null, earSamples: [], sawClosed: false, closedAt: 0, turnedA: false, turnedB: false, startedAt: Date.now(), easyTurn: !!opts.easyTurn }
+export function newChallenge(): ChallengeState {
+  const sequence: ChallengeKind[] = Math.random() < 0.5 ? ['blink', 'turn'] : ['turn', 'blink']
+  return { sequence, index: 0, done: false, baselineEar: null, earSamples: [], sawClosed: false, closedAt: 0, turnedA: false, turnedB: false, startedAt: Date.now() }
 }
 
 /** Feed a frame; returns the updated state. Pure function — easy to unit test. */
@@ -54,11 +48,9 @@ export function stepChallenge(s: ChallengeState, f: FaceFrame, now = Date.now())
     }
   }
   if (current === 'turn') {
-    const far = st.easyTurn ? 0.2 : 0.32
-    if (f.yaw > far) st.turnedA = true
-    if (f.yaw < -far) st.turnedB = true
-    const turned = st.easyTurn ? st.turnedA || st.turnedB : st.turnedA && st.turnedB
-    if (turned && Math.abs(f.yaw) < (st.easyTurn ? 0.12 : 0.2)) return advance(st)   // and back to the front
+    if (f.yaw > 0.32) st.turnedA = true
+    if (f.yaw < -0.32) st.turnedB = true
+    if (st.turnedA && st.turnedB && Math.abs(f.yaw) < 0.2) return advance(st)
   }
   return st
 }

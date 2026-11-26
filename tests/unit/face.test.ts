@@ -49,33 +49,6 @@ describe('active liveness challenge', () => {
   })
 })
 
-describe('faster challenge options', () => {
-  const run = (opts: { single?: boolean; easyTurn?: boolean }, rnd: number, frames: Partial<FaceFrame>[]) => {
-    let s = newChallenge(opts, rnd)
-    let t = 0
-    for (const f of frames) { s = stepChallenge(s, frame(f), (t += 100)) }
-    return s
-  }
-  const open = Array.from({ length: 8 }, () => ({ ear: 0.3 }))
-  it('single: only one challenge, still chosen at random', () => {
-    expect(newChallenge({ single: true }, 0.1).sequence).toEqual(['blink'])
-    expect(newChallenge({ single: true }, 0.9).sequence).toEqual(['turn'])
-    expect(newChallenge({}, 0.1).sequence).toHaveLength(2)          // default unchanged
-  })
-  it('single blink is enough', () => {
-    expect(run({ single: true }, 0.1, [...open, { ear: 0.1 }, { ear: 0.29 }]).done).toBe(true)
-  })
-  it('easy turn: a small turn to one side and back passes', () => {
-    expect(run({ single: true, easyTurn: true }, 0.9, [{ yaw: 0.22 }, { yaw: 0.05 }]).done).toBe(true)
-  })
-  it('easy turn still needs real movement — a still face does not pass', () => {
-    expect(run({ single: true, easyTurn: true }, 0.9, Array.from({ length: 30 }, () => ({ yaw: 0.02 }))).done).toBe(false)
-  })
-  it('normal turn still needs both sides and a bigger angle', () => {
-    expect(run({ single: true }, 0.9, [{ yaw: 0.22 }, { yaw: 0.05 }]).done).toBe(false)
-  })
-})
-
 describe('helpers', () => {
   it('median and mean vector', () => {
     expect(median([3, 1, 2])).toBe(2)

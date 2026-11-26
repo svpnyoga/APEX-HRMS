@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
 import { getFaceProvider } from './index'
 import type { FaceFrame } from './types'
 import { assessQuality, frameBrightness, meanVector, median, QUALITY_MESSAGES } from './quality'
-import { challengeText, newChallenge, stepChallenge, type ChallengeOptions, type ChallengeState } from './liveness'
+import { CHALLENGE_TEXT, newChallenge, stepChallenge, type ChallengeState } from './liveness'
 
 export type VerifyCapture = { embedding: number[]; antispoof: number; liveness: number; challengePassed: boolean; quality: number; modelId: string }
 export type EnrolCapture = { embeddings: number[][]; qualities: number[]; modelId: string }
@@ -21,9 +21,6 @@ type Props = {
   autoStart?: boolean
   compact?: boolean
   resultLabel?: { tone: 'success' | 'danger'; text: string } | null
-  /** Faster check options; `skip` is asked once the face is aligned — when it returns true the blink/turn step is
-   *  skipped and reported as not done (the server decides whether that is allowed, e.g. inside the office). */
-  liveness?: ChallengeOptions & { skip?: () => boolean }
 }
 
 const ENROL_POSES = [
@@ -38,10 +35,8 @@ const ENROL_POSES = [
 
 const TIMEOUT_MS = 60_000
 
-export function FaceScanner({ mode, providerId = 'human-faceres-v1', thresholds = { antispoof: 0.5, liveness: 0.5 }, samples = 5, onVerify, onEnrol, autoStart = true, compact, resultLabel, liveness }: Props) {
+export function FaceScanner({ mode, providerId = 'human-faceres-v1', thresholds = { antispoof: 0.5, liveness: 0.5 }, samples = 5, onVerify, onEnrol, autoStart = true, compact, resultLabel }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
-  const livenessRef = useRef(liveness)
-  livenessRef.current = liveness
   const canvasRef = useRef<HTMLCanvasElement>(document.createElement('canvas'))
   const streamRef = useRef<MediaStream | null>(null)
   const runRef = useRef(0)
@@ -82,7 +77,6 @@ export function FaceScanner({ mode, providerId = 'human-faceres-v1', thresholds 
       let stablesince = 0
       let ch = newChallenge()
       let anchor: number[] | null = null
-      let skipped = false
       const captured: { e: number[]; a: number; l: number; q: number }[] = []
       let pose = 0
       let lastCapture = 0
@@ -109,9 +103,8 @@ export function FaceScanner({ mode, providerId = 'human-faceres-v1', thresholds 
             setMessage('Hold still…')
             if (held > 600 && f.embedding) {
               anchor = f.embedding
-              ch = newChallenge(mode === 'verify' ? livenessRef.current : undefined); setChallenge(ch)
-              if (mode === 'verify' && livenessRef.current?.skip?.()) { skipped = true; ch = { ...ch, done: true }; setPhaseState('capture'); setMessage('Look straight at the camera') }
-              else { setPhaseState('challenge'); setMessage(challengeText(ch, ch.sequence[0])) }
+              ch = newChallenge(); setChallenge(ch)
+              setPhaseState('challenge'); setMessage(CHALLENGE_TEXT[ch.sequence[0]])
             }
           }
         } else if (phaseNow === 'challenge') {
@@ -121,7 +114,7 @@ export function FaceScanner({ mode, providerId = 'human-faceres-v1', thresholds 
             setChallenge(ch)
             setProgress(20 + (ch.index / ch.sequence.length) * 40)
             if (ch.done) { setPhaseState('capture'); setMessage(mode === 'enrol' ? ENROL_POSES[0].text : 'Look straight at the camera') }
-            else setMessage(challengeText(ch, ch.sequence[ch.index]))
+            else setMessage(CHALLENGE_TEXT[ch.sequence[ch.index]])
           }
         } else if (phaseNow === 'capture') {
           const target = mode === 'enrol' ? Math.max(samples, 5) : 4
@@ -153,7 +146,7 @@ export function FaceScanner({ mode, providerId = 'human-faceres-v1', thresholds 
                 embedding: meanVector(captured.map((c) => c.e)),
                 antispoof: median(captured.map((c) => c.a)),
                 liveness: median(captured.map((c) => c.l)),
-                challengePassed: ch.done && !skipped,
+                challengePassed: ch.done,
                 quality: median(captured.map((c) => c.q)),
                 modelId: provider.modelId,
               })
