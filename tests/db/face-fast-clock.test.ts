@@ -11,6 +11,7 @@ const LAT = 13.0, LNG = 80.0
 let emp: string
 beforeAll(async () => {
   db = await createDb()
+  await db.query(`update company_settings set face_provider = 'human-faceres-v1'`)   // these rules are model-independent; written with the old model's numbers
   await db.query(`update company_settings set face_recognition_enabled = true, face_required_for_clock = true, face_skip_challenge_in_office = false`)
   emp = (await db.query<any>(`select id from employees where user_id = $1`, [USERS.employee])).rows[0].id
   await db.query(`delete from employee_site_assignments where employee_id = $1`, [emp])

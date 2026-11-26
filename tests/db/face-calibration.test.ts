@@ -7,7 +7,10 @@ import { createDb, asUser, USERS, EMP } from './harness'
 let db: PGlite
 const model = 'human-faceres-v1'
 const add = (v: number[], k: number) => v.map((x, i) => (i === 0 ? x + k : x))
-beforeAll(async () => { db = await createDb() })
+beforeAll(async () => { db = await createDb()
+  await db.query(`update company_settings set face_provider = 'human-faceres-v1'`)
+  // these rules are model-independent; written with the old model's numbers
+})
 
 describe('face match scoring', () => {
   it('HR test uses the same top-3 score as real check-in', async () => {

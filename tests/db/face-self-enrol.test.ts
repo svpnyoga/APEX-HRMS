@@ -9,6 +9,7 @@ const five = JSON.stringify(Array.from({ length: 5 }, (_, i) => [1 + i * 0.01, 1
 let emp: string
 beforeAll(async () => {
   db = await createDb()
+  await db.query(`update company_settings set face_provider = 'human-faceres-v1'`)   // these rules are model-independent; written with the old model's numbers
   await db.query(`update company_settings set face_recognition_enabled = true`)
   emp = (await db.query<any>(`select id from employees where user_id = $1`, [USERS.field])).rows[0].id
   await db.query(`delete from face_enrolments where employee_id = $1`, [emp])

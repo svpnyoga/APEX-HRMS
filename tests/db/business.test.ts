@@ -5,6 +5,7 @@ import { createDb, asUser, USERS, EMP } from './harness'
 let db: PGlite
 beforeAll(async () => {
   db = await createDb()
+  await db.query(`update company_settings set face_provider = 'human-faceres-v1'`)   // these rules are model-independent; written with the old model's numbers
 })
 
 const vec = (seed: number, dims = 1024) => {
