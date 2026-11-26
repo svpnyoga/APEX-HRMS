@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { LogIn, LogOut, MapPin, ScanFace, WifiOff, CloudUpload, ShieldCheck } from 'lucide-react'
@@ -16,6 +16,8 @@ import { cn, errorMessage, fmtTime, isoDate, minutes } from '@/lib/utils'
 import { ConsentDialog } from '@/modules/self/consent'
 
 type Geo = { lat: number; lng: number; accuracy: number; status: 'ok' | 'denied' | 'unavailable' | 'low_accuracy' }
+
+const distanceM = (a: number, b: number, c: number, d: number) => { const R = 6371000, r = Math.PI / 180, x = Math.sin(((c - a) * r) / 2) ** 2 + Math.cos(a * r) * Math.cos(c * r) * Math.sin(((d - b) * r) / 2) ** 2; return 2 * R * Math.asin(Math.sqrt(x)) }
 
 function getPosition(): Promise<Geo> {
   return new Promise((resolve) => {
@@ -71,10 +73,31 @@ export function ClockPanel() {
   const assigned = sites.filter((s) => s.assigned)
   useEffect(() => { if (!site && assigned.length) setSite((assigned.find((s) => s.primary) ?? assigned[0]).id) }, [assigned.length]) // eslint-disable-line
 
+  // a GPS fix taken while the face is being scanned: used to skip the blink/turn inside the office (if HR allows),
+  // and reused for the punch itself so it does not wait for GPS a second time
+  const scanGeo = useRef<{ at: number; geo: Geo } | null>(null)
+  useEffect(() => {
+    if (!scanning || settings.gps_mode === 'off') return
+    scanGeo.current = null
+    getPosition().then((g) => { scanGeo.current = { at: Date.now(), geo: g } })
+  }, [scanning]) // eslint-disable-line
+  const officeSite = () => {
+    const chosen = sites.find((x) => x.id === site)
+    if (chosen) return chosen.site_type === 'office' ? chosen : null
+    return sites.find((x) => x.primary && x.site_type === 'office') ?? sites.find((x) => x.site_type === 'office') ?? null
+  }
+  const insideOffice = () => {
+    const g = scanGeo.current?.geo
+    const o = officeSite()
+    if (!settings.face_skip_in_office || !navigator.onLine || !g || g.status !== 'ok' || g.accuracy > 150 || !o?.latitude) return false
+    return distanceM(g.lat, g.lng, o.latitude, o.longitude) <= o.radius_m    // the server re-checks this
+  }
+
   const record = async (capture?: VerifyCapture) => {
     setBusy(true)
     const clientId = crypto.randomUUID()
-    const geo = settings.gps_mode === 'off' ? null : await getPosition()
+    const fresh = scanGeo.current && Date.now() - scanGeo.current.at < 60_000 ? scanGeo.current.geo : null
+    const geo = settings.gps_mode === 'off' ? null : fresh ?? await getPosition()
     const base = {
       p_site_id: site && site !== '__new' ? site : null,
       p_new_site_name: site === '__new' ? newSite.trim() || null : null,
@@ -192,7 +215,8 @@ export function ClockPanel() {
 
       <Dialog open={scanning} onOpenChange={(o) => { if (!busy) setScanning(o) }} title={clockedIn ? 'Clock out' : 'Clock in'} description="Follow the prompts. This takes about 5 seconds." size="md">
         {scanning && (
-          <FaceScanner mode="verify" providerId={settings.face_provider} thresholds={{ antispoof: Number(settings.antispoof_threshold ?? 0.5), liveness: Number(settings.liveness_threshold ?? 0.5) }}
+          <FaceScanner mode="verify" providerId={settings.face_provider}
+            liveness={{ single: !!settings.face_single_challenge, easyTurn: !!settings.face_easy_turn, skip: insideOffice }} thresholds={{ antispoof: Number(settings.antispoof_threshold ?? 0.5), liveness: Number(settings.liveness_threshold ?? 0.5) }}
             onVerify={onCapture} resultLabel={result} />
         )}
         <p className="mt-3 text-center text-xs text-muted">Trouble with the camera? Submit an attendance regularisation request or ask HR for manual attendance.</p>
