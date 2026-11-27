@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeftRight, CheckCircle2, FileUp, LayoutGrid, List, Pencil, Plus, UserCheck, UserX, Building2, ExternalLink, Mail, Phone, MapPin } from 'lucide-react'
+import { ArrowLeftRight, CheckCircle2, Trash2, FileUp, LayoutGrid, List, Pencil, Plus, UserCheck, UserX, Building2, ExternalLink, Mail, Phone, MapPin } from 'lucide-react'
 import { db, rpc, unwrap } from '@/lib/api'
 import { useAuth, useMe } from '@/app/auth'
 import { useAction, useDirectory, type DirectoryRow } from '@/hooks/data'
-import { uploadFile, openFile } from '@/lib/storage'
+import { uploadFileDetailed, openFile } from '@/lib/storage'
+import { supabase } from '@/lib/supabase'
 import { DataTable, type Column } from '@/components/common/DataTable'
 import { PageHeader, QueryView, StatStrip, EmptyState } from '@/components/common/page'
 import { EmployeeCell, EmployeePicker } from '@/components/common/pickers'
@@ -424,6 +425,14 @@ export function DocumentsList({ employeeId }: { employeeId?: string }) {
   })
   const verify = useAction(({ id, s, remarks }: { id: string; s: string; remarks?: string }) => unwrap(db.from('employee_documents').update({ verification_status: s, verified_at: new Date().toISOString(), remarks: remarks ?? null }).eq('id', id).select('id')), { success: 'Document updated', invalidate: [['documents']] })
   const confirm = useConfirm()
+  const remove = useAction(async (id: string) => {
+    const path = await rpc<string>('delete_employee_document', { p_id: id })
+    await supabase.storage.from('employee-documents').remove([path])   // best effort: the record is already gone
+  }, { success: 'Document deleted', invalidate: [['documents']] })
+  const canDelete = (r: any) => can('employees.documents') || (r.employee_id === me && r.verification_status !== 'verified')
+  const askDelete = async (r: any) => {
+    if ((await confirm({ title: `Delete "${r.title}"?`, description: 'The file is removed for good. Upload it again if it is needed later.', danger: true, confirmLabel: 'Delete' })).ok) remove.mutate(r.id)
+  }
   return (
     <div>
       <DataTable rows={q.data} loading={q.isLoading} error={q.error} exportName="Employee documents" columns={[
@@ -432,10 +441,13 @@ export function DocumentsList({ employeeId }: { employeeId?: string }) {
         { key: 'type', header: 'Type', value: (r) => r.document_types?.name }, { key: 'expiry_date', header: 'Expires', cell: (r) => fmtDate(r.expiry_date), hideOnMobile: true },
         { key: 'created_at', header: 'Uploaded', cell: (r) => fmtDate(r.created_at), hideOnMobile: true },
         { key: 'verification_status', header: 'Verification', cell: (r) => <StatusBadge status={r.verification_status} /> },
-        ...(can('employees.documents') ? [{ key: '_actions', header: '', sortable: false, exportable: false, className: 'text-right', cell: (r: any) => r.verification_status === 'pending' && (
-          <div className="flex justify-end gap-1"><Button size="sm" variant="ghost" onClick={async () => { const c = await confirm({ title: 'Reject document?', requireReason: true }); if (c.ok) verify.mutate({ id: r.id, s: 'rejected', remarks: c.reason }) }}>Reject</Button>
-            <Button size="sm" variant="success" onClick={() => verify.mutate({ id: r.id, s: 'verified' })}><CheckCircle2 /> Verify</Button></div>
-        ) } as Column<any>] : []),
+        { key: '_actions', header: '', sortable: false, exportable: false, className: 'text-right', cell: (r: any) => (
+          <div className="flex justify-end gap-1">
+            {can('employees.documents') && r.verification_status === 'pending' && <>
+              <Button size="sm" variant="ghost" onClick={async () => { const c = await confirm({ title: 'Reject document?', requireReason: true }); if (c.ok) verify.mutate({ id: r.id, s: 'rejected', remarks: c.reason }) }}>Reject</Button>
+              <Button size="sm" variant="success" onClick={() => verify.mutate({ id: r.id, s: 'verified' })}><CheckCircle2 /> Verify</Button></>}
+            {canDelete(r) && <Button size="sm" variant="ghost" aria-label={`Delete ${r.title}`} title="Delete" onClick={() => askDelete(r)}><Trash2 className="text-danger" /></Button>}
+          </div>) } as Column<any>,
       ]} toolbar={<>
         <Select value={status} onChange={(e) => setStatus(e.target.value)} className="w-auto" aria-label="Verification status"><option value="">All</option><option value="pending">Pending verification</option><option value="verified">Verified</option><option value="rejected">Rejected</option></Select>
         <Button size="sm" onClick={() => setUploading(true)} className="ml-auto"><FileUp /> Upload</Button>
@@ -453,8 +465,9 @@ function UploadDocDialog({ employeeId, orgId, onClose, pickEmployee }: { employe
   const [expiry, setExpiry] = useState('')
   const save = useAction(async () => {
     const f = files[0]
-    const path = await uploadFile('employee-documents', orgId, emp!, f)
-    return unwrap(db.from('employee_documents').insert({ employee_id: emp, document_type_id: type, title: title || f.name, storage_path: path, file_name: f.name, mime_type: f.type, size_bytes: f.size, expiry_date: expiry || null }).select('id'))
+    const up = await uploadFileDetailed('employee-documents', orgId, emp!, f)
+    // no .select(): an employee's own new row is readable, but keep it simple and robust
+    return unwrap(db.from('employee_documents').insert({ employee_id: emp, document_type_id: type, title: title || f.name, storage_path: up.path, file_name: up.name, mime_type: up.type, size_bytes: up.size, expiry_date: expiry || null }))
   }, { success: 'Document uploaded', invalidate: [['documents']], onSuccess: onClose })
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()} title="Upload document" footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button loading={save.isPending} disabled={!files.length || !emp} onClick={() => save.mutate()}>Upload</Button></>}>
