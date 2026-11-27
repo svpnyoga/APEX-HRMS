@@ -5,7 +5,7 @@ import { errorMessage } from '@/lib/utils'
 
 export type DirectoryRow = {
   id: string; employee_code: string; full_name: string; first_name: string; last_name: string; photo_url: string | null; official_email: string | null
-  department_id: string | null; department_name: string | null; designation_id: string | null; designation_name: string | null
+  department_id: string | null; department_name: string | null; department_ids?: string[] | null; department_names?: string | null; designation_id: string | null; designation_name: string | null
   location_id: string | null; location_name: string | null; reporting_manager_id: string | null; status: string; employment_type: string
   date_of_joining: string; is_field_employee: boolean; birthday_mmdd: string | null; user_id: string | null
 }

@@ -91,8 +91,8 @@ function SeenCard({ unread, onSeen, className, children }: { unread: boolean; on
 
 function Manage({ category }: { category: Category }) {
   const q = useQuery({ queryKey: ['crud', 'announcements', category], queryFn: () => unwrap<any[]>(db.from('announcements').select('*, announcement_recipients(read_at, acknowledged_at)').eq('category', category).order('publish_at', { ascending: false })) })
-  const people = useQuery({ queryKey: ['engagement', 'audience'], queryFn: () => unwrap<any[]>(db.from('employee_directory').select('id, department_id, location_id').not('status', 'in', '(exited,inactive)')) })
-  const audienceSize = (r: any) => { const p = people.data; if (!p) return '—'; return r.audience === 'department' ? p.filter((e) => e.department_id === r.department_id).length : r.audience === 'location' ? p.filter((e) => e.location_id === r.location_id).length : p.length }
+  const people = useQuery({ queryKey: ['engagement', 'audience'], queryFn: () => unwrap<any[]>(db.from('employee_directory').select('*').not('status', 'in', '(exited,inactive)')) })
+  const audienceSize = (r: any) => { const p = people.data; if (!p) return '—'; return r.audience === 'department' ? p.filter((e) => (e.department_ids?.length ? e.department_ids.includes(r.department_id) : e.department_id === r.department_id)).length : r.audience === 'location' ? p.filter((e) => e.location_id === r.location_id).length : p.length }
   const [edit, setEdit] = useState<any | null | undefined>(undefined)
   const publish = useAction((id: string) => rpc<number>('publish_announcement', { p_id: id }), { success: 'Published and audience notified', invalidate: [['crud', 'announcements'], ['engagement']] })
   const cfg = annCfg(category)

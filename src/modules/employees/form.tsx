@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -27,7 +28,7 @@ const schema = z.object({
   date_of_joining: z.string().min(1, 'Joining date is required'),
   probation_end_date: z.string().optional(),
   employment_type: z.string().min(1),
-  department_id: z.string().nullable().optional(), designation_id: z.string().nullable().optional(),
+  department_ids: z.array(z.string()).default([]), designation_id: z.string().nullable().optional(),
   reporting_manager_id: z.string().nullable().optional(), location_id: z.string().nullable().optional(), shift_id: z.string().nullable().optional(),
   is_field_employee: z.boolean().default(false),
   notice_period_days: z.coerce.number().min(0).max(180),
@@ -47,7 +48,7 @@ export function EmployeeForm({ open, onOpenChange, employee, onSaved }: { open: 
       mobile: employee?.mobile ?? '', date_of_birth: employee?.date_of_birth ?? '', gender: employee?.gender ?? '', address_line: employee?.address_line ?? '',
       city: employee?.city ?? '', state: employee?.state ?? 'Tamil Nadu', postal_code: employee?.postal_code ?? '',
       date_of_joining: employee?.date_of_joining ?? new Date().toISOString().slice(0, 10), probation_end_date: employee?.probation_end_date ?? '',
-      employment_type: employee?.employment_type ?? 'full_time', department_id: employee?.department_id ?? null, designation_id: employee?.designation_id ?? null,
+      employment_type: employee?.employment_type ?? 'full_time', department_ids: employee?.department_ids?.length ? employee.department_ids : employee?.department_id ? [employee.department_id] : [], designation_id: employee?.designation_id ?? null,
       reporting_manager_id: employee?.reporting_manager_id ?? null, location_id: employee?.location_id ?? null, shift_id: employee?.shift_id ?? null,
       is_field_employee: employee?.is_field_employee ?? false, notice_period_days: employee?.notice_period_days ?? 30, invite: false,
     })
@@ -57,6 +58,7 @@ export function EmployeeForm({ open, onOpenChange, employee, onSaved }: { open: 
     const { invite, ...rest } = v
     const payload: Record<string, any> = Object.fromEntries(Object.entries(rest).map(([k, x]) => [k, typeof x === 'string' ? blank(x) : x]))
     payload.last_name = v.last_name ?? ''
+    payload.department_ids = v.department_ids ?? []; payload.department_id = v.department_ids?.[0] ?? null   // first = main department
     if (!payload.employee_code) delete payload.employee_code      // blank: new → automatic ID; edit → keep the current one
     let id = employee?.id
     const taken = (err: unknown) => /duplicate|unique/i.test(String((err as Error)?.message)) ? new Error(`Employee ID ${v.employee_code} is already used by someone else`) : err
@@ -109,7 +111,7 @@ export function EmployeeForm({ open, onOpenChange, employee, onSaved }: { open: 
             <Field label="Probation ends"><Input type="date" {...r('probation_end_date')} /></Field>
             <Field label="Employment type" required><Select {...r('employment_type')}>{['full_time', 'part_time', 'contract', 'intern', 'consultant', 'trainee'].map((t) => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}</Select></Field>
             <Field label="Notice period (days)"><Input type="number" {...r('notice_period_days')} /></Field>
-            <Field label="Department"><Controller control={form.control} name="department_id" render={({ field }) => <LookupSelect def={{ name: 'department_id', label: 'Department', type: 'lookup', lookup: { table: 'departments', filter: (q) => q.is('deleted_at', null) } }} value={field.value} onChange={field.onChange} />} /></Field>
+            <Field label="Departments" className="sm:col-span-2" hint="Tick every department this person works in. The first one ticked is the main department (used for reports and payroll); tap ★ to make another one main."><Controller control={form.control} name="department_ids" render={({ field }) => <DepartmentsPicker value={field.value ?? []} onChange={field.onChange} />} /></Field>
             <Field label="Designation"><Controller control={form.control} name="designation_id" render={({ field }) => <LookupSelect def={{ name: 'designation_id', label: 'Designation', type: 'lookup', lookup: { table: 'designations', filter: (q) => q.is('deleted_at', null) } }} value={field.value} onChange={field.onChange} />} /></Field>
             <Field label="Reporting manager"><Controller control={form.control} name="reporting_manager_id" render={({ field }) => <EmployeePicker value={field.value} onChange={field.onChange} allowClear filter={(x: any) => x.id !== employee?.id} />} /></Field>
             <Field label="Work location"><Controller control={form.control} name="location_id" render={({ field }) => <LookupSelect def={{ name: 'location_id', label: 'Location', type: 'lookup', lookup: { table: 'locations' } }} value={field.value} onChange={field.onChange} />} /></Field>
@@ -127,5 +129,28 @@ export function EmployeeForm({ open, onOpenChange, employee, onSaved }: { open: 
         <button type="submit" hidden />
       </form>
     </Dialog>
+  )
+}
+
+/** tick any number of departments; the first in the list is the main one */
+function DepartmentsPicker({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
+  const deps = useQuery({ queryKey: ['crud', 'departments', 'picker'], queryFn: () => unwrap<any[]>(db.from('departments').select('id, name').is('deleted_at', null).order('name')) })
+  const list = deps.data ?? []
+  const toggle = (id: string) => onChange(value.includes(id) ? value.filter((x) => x !== id) : [...value, id])
+  const makeMain = (id: string) => onChange([id, ...value.filter((x) => x !== id)])
+  if (deps.isLoading) return <p className="text-sm text-muted">Loading departments…</p>
+  if (!list.length) return <p className="text-sm text-muted">No departments yet — add them in Employees → Departments.</p>
+  return (
+    <div className="flex flex-wrap gap-2">
+      {list.map((d) => {
+        const on = value.includes(d.id), main = value[0] === d.id
+        return (
+          <span key={d.id} className={`inline-flex items-center rounded-full border text-sm ${on ? 'border-primary bg-primary/10 text-primary' : 'border-line text-muted'}`}>
+            <button type="button" onClick={() => toggle(d.id)} className="px-3 py-1.5" aria-pressed={on}>{on ? '✓ ' : ''}{d.name}</button>
+            {on && <button type="button" onClick={() => makeMain(d.id)} title={main ? 'Main department' : 'Make this the main department'} className={`pr-3 ${main ? '' : 'opacity-40 hover:opacity-100'}`}>★{main ? ' Main' : ''}</button>}
+          </span>
+        )
+      })}
+    </div>
   )
 }

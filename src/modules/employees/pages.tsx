@@ -31,13 +31,13 @@ export function Directory({ cards: initialCards = false }: { cards?: boolean }) 
   const [status, setStatus] = useState('current')
   const [creating, setCreating] = useState(false)
   const canOpen = can(['employees.view', 'employees.view_team'])
-  const rows = (dir.data ?? []).filter((e) => (!dept || e.department_id === dept) && (status === 'all' || (status === 'current' ? e.status !== 'exited' : e.status === status)))
-  const depts = [...new Map((dir.data ?? []).filter((e) => e.department_id).map((e) => [e.department_id, e.department_name])).entries()]
+  const rows = (dir.data ?? []).filter((e) => (!dept || (e.department_ids?.length ? e.department_ids.includes(dept) : e.department_id === dept)) && (status === 'all' || (status === 'current' ? e.status !== 'exited' : e.status === status)))
+  const depts = [...new Map((dir.data ?? []).flatMap((e) => { const ids = e.department_ids?.length ? e.department_ids : e.department_id ? [e.department_id] : []; const names = (e.department_names ?? e.department_name ?? '').split(', '); return ids.map((id, i) => [id, names[i] ?? e.department_name] as [string, string | null]) })).entries()]
   const cols: Column<DirectoryRow>[] = [
     { key: 'full_name', header: 'Employee', cell: (r) => <EmployeeCell name={r.full_name} photo={r.photo_url} sub={r.official_email ?? r.employee_code} /> },
     { key: 'employee_code', header: 'ID', className: 'tnum' },
     { key: 'designation_name', header: 'Designation' },
-    { key: 'department_name', header: 'Department', hideOnMobile: true },
+    { key: 'department_name', header: 'Department', hideOnMobile: true, value: (r: any) => r.department_names || r.department_name },
     { key: 'location_name', header: 'Location', hideOnMobile: true },
     { key: 'date_of_joining', header: 'Joined', cell: (r) => fmtDate(r.date_of_joining), hideOnMobile: true },
     { key: 'status', header: 'Status', cell: (r) => <StatusBadge status={r.status} /> },
@@ -89,6 +89,8 @@ export function EmployeeProfile() {
   const { employeeId } = useMe()
   const confirm = useConfirm()
   const q = useEmp(id)
+  const dirRow = useDirectory(true).data?.find((x) => x.id === id)
+  const deptLabel = dirRow?.department_names || q.data?.departments?.name
   const [editing, setEditing] = useState(false)
   const deactivate = useAction(async (reason: string) => {
     await unwrap(db.from('employees').update({ status: 'inactive' }).eq('id', id).select('id'))
@@ -115,7 +117,7 @@ export function EmployeeProfile() {
               <Avatar name={name} src={e.photo_url} size={72} />
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2"><h2 className="text-lg font-semibold">{name}</h2><StatusBadge status={e.status} />{e.is_field_employee && <Badge tone="info">Field</Badge>}</div>
-                <p className="text-sm text-muted">{e.designations?.name ?? '—'} · {e.departments?.name ?? '—'}</p>
+                <p className="text-sm text-muted">{e.designations?.name ?? '—'} · {deptLabel ?? '—'}</p>
                 <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-muted">
                   <span className="tnum">{e.employee_code}</span>
                   {e.official_email && <a href={`mailto:${e.official_email}`} className="flex items-center gap-1 hover:text-text"><Mail className="h-3.5 w-3.5" />{e.official_email}</a>}
@@ -137,7 +139,7 @@ export function EmployeeProfile() {
               <TabsContent value="employment">
                 <Card className="p-5"><KV items={[
                   ['Employee ID', e.employee_code], ['Employment type', titleCase(e.employment_type)], ['Status', <StatusBadge status={e.status} />],
-                  ['Department', e.departments?.name], ['Designation', e.designations?.name], ['Location', e.locations?.name],
+                  [(q.data?.department_ids?.length ?? 0) > 1 ? 'Departments' : 'Department', deptLabel], ['Designation', e.designations?.name], ['Location', e.locations?.name],
                   ['Shift', e.shifts ? `${e.shifts.name} (${fmtTime(e.shifts.start_time)}–${fmtTime(e.shifts.end_time)})` : 'Company default'],
                   ['Date of joining', fmtDate(e.date_of_joining)], ['Probation ends', fmtDate(e.probation_end_date)], ['Confirmed on', fmtDate(e.confirmation_date)],
                   ['Notice period', `${e.notice_period_days} days`], ['Exit date', fmtDate(e.exit_date)],
@@ -359,7 +361,7 @@ export function OrgStructure() {
   const byParent = useMemo(() => { const m = new Map<string | null, any[]>(); for (const d of deps.data ?? []) m.set(d.parent_id, [...(m.get(d.parent_id) ?? []), d]); return m }, [deps.data])
   const people = dir.data ?? []
   const Node = ({ d, depth }: { d: any; depth: number }) => {
-    const members = people.filter((p) => p.department_id === d.id)
+    const members = people.filter((p) => (p.department_ids?.length ? p.department_ids.includes(d.id) : p.department_id === d.id))
     const head = people.find((p) => p.id === d.head_employee_id)
     return (
       <div className={cn(depth > 0 && 'ml-6 border-l border-line pl-4')}>
