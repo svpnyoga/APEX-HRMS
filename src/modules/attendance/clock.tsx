@@ -66,7 +66,8 @@ export function ClockPanel() {
 
   const h = home.data
   const settings = h?.settings ?? {}
-  const clockedIn = h?.open_session?.event_type === 'in'
+  // a clock-in older than 20 hours is a forgotten clock-out (the server closes it at shift end): start the day with Clock in
+  const clockedIn = h?.open_session?.event_type === 'in' && Date.now() - new Date(h.open_session.occurred_at).getTime() < 20 * 3600_000
   const sites: any[] = h?.sites ?? []
   const assigned = sites.filter((s) => s.assigned)
   useEffect(() => { if (!site && assigned.length) setSite((assigned.find((s) => s.primary) ?? assigned[0]).id) }, [assigned.length]) // eslint-disable-line
