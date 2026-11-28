@@ -76,7 +76,7 @@ export function NotificationBell() {
 export function GlobalSearch() {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
-  const { can } = useAuth()
+  const { can, access } = useAuth()
   const nav = useNavigate()
   const dir = useDirectory()
   useEffect(() => {
@@ -84,7 +84,7 @@ export function GlobalSearch() {
     window.addEventListener('keydown', h)
     return () => window.removeEventListener('keydown', h)
   }, [])
-  const pages = useMemo(() => visibleNav(can).flatMap((m) => m.items.map((i) => ({ ...i, module: m.label }))), [can])
+  const pages = useMemo(() => visibleNav(can, !!access?.employee_id).flatMap((m) => m.items.map((i) => ({ ...i, module: m.label }))), [can, access?.employee_id])
   const needle = q.toLowerCase().trim()
   const pageHits = needle ? pages.filter((p) => `${p.label} ${p.module}`.toLowerCase().includes(needle)).slice(0, 8) : pages.slice(0, 6)
   const empHits = needle ? (dir.data ?? []).filter((e) => `${e.full_name} ${e.employee_code} ${e.designation_name ?? ''}`.toLowerCase().includes(needle)).slice(0, 6) : []
@@ -133,8 +133,8 @@ export function UserMenu({ portal }: { portal: 'admin' | 'self' }) {
     }>
       <MenuLabel><span className="block font-medium text-text">{profile?.full_name}</span><span className="block">{profile?.email}</span></MenuLabel>
       <MenuSeparator />
-      <MenuItem onSelect={() => nav('/me/profile')}><User /> My profile</MenuItem>
-      {portal === 'admin' ? <MenuItem onSelect={() => nav('/me')}><Smartphone /> Employee self-service</MenuItem>
+      {access?.employee_id && <MenuItem onSelect={() => nav('/me/profile')}><User /> My profile</MenuItem>}
+      {portal === 'admin' ? access?.employee_id ? <MenuItem onSelect={() => nav('/me')}><Smartphone /> Employee self-service</MenuItem> : null
         : hasAdmin ? <MenuItem onSelect={() => nav('/')}><LayoutGrid /> HR & manager portal</MenuItem> : null}
       <MenuItem onSelect={toggle}>{theme === 'dark' ? <Sun /> : <Moon />} {theme === 'dark' ? 'Light' : 'Dark'} theme</MenuItem>
       <MenuSeparator />

@@ -3,14 +3,15 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 
-export type NavItem = { label: string; path: string; perm?: string | string[] }
+/** self: a personal page (my leave, my claims…) — hidden for logins that are not linked to an employee */
+export type NavItem = { label: string; path: string; perm?: string | string[]; self?: boolean }
 export type NavModule = { key: string; label: string; icon: LucideIcon; items: NavItem[]; perm?: string | string[] }
 
 // Exact module organisation from the specification. Every path is a real route (verified at startup in dev).
 export const NAV: NavModule[] = [
   { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, items: [
     { label: 'HR Overview', path: '/dashboard', perm: 'dashboard.view' },
-    { label: 'Employee Dashboard', path: '/me' },
+    { label: 'Employee Dashboard', path: '/me', self: true },
     { label: 'Attendance Overview', path: '/attendance', perm: ['attendance.view', 'attendance.view_team'] },
     { label: 'Leave Overview', path: '/leave', perm: ['leave.view', 'leave.view_team'] },
     { label: 'Claims Overview', path: '/claims', perm: ['claims.view', 'claims.view_team', 'claims.reimburse'] },
@@ -34,7 +35,7 @@ export const NAV: NavModule[] = [
     { label: 'Daily Attendance', path: '/attendance/daily', perm: ['attendance.view', 'attendance.view_team'] },
     { label: 'Monthly Attendance', path: '/attendance/monthly', perm: ['attendance.view', 'attendance.view_team'] },
     { label: 'Attendance Calendar', path: '/attendance/calendar' },
-    { label: 'Clock In / Clock Out', path: '/attendance/clock', perm: 'attendance.clock' },
+    { label: 'Clock In / Clock Out', path: '/attendance/clock', perm: 'attendance.clock', self: true },
     { label: 'Face Recognition', path: '/attendance/face', perm: 'attendance.face_enrol' },
     { label: 'Shift Management', path: '/attendance/shifts', perm: 'attendance.manage' },
     { label: 'Work Schedules', path: '/attendance/schedules', perm: 'attendance.manage' },
@@ -49,7 +50,7 @@ export const NAV: NavModule[] = [
   { key: 'leave', label: 'Leave Management', icon: CalendarDays, items: [
     { label: 'Leave Dashboard', path: '/leave', perm: ['leave.view', 'leave.view_team'] },
     { label: 'Leave Applications', path: '/leave/applications' },
-    { label: 'Apply Leave', path: '/leave/apply', perm: 'leave.apply' },
+    { label: 'Apply Leave', path: '/leave/apply', perm: 'leave.apply', self: true },
     { label: 'Leave Approvals', path: '/leave/approvals' },
     { label: 'Leave Types', path: '/leave/types', perm: 'leave.manage' },
     { label: 'Leave Policies', path: '/leave/policies', perm: 'leave.manage' },
@@ -78,8 +79,8 @@ export const NAV: NavModule[] = [
   ] },
   { key: 'claims', label: 'Expense & Claims', icon: Receipt, items: [
     { label: 'Claims Dashboard', path: '/claims', perm: ['claims.view', 'claims.view_team', 'claims.reimburse'] },
-    { label: 'Submit Claim', path: '/claims/new', perm: 'claims.submit' },
-    { label: 'My Claims', path: '/claims/mine', perm: 'claims.submit' },
+    { label: 'Submit Claim', path: '/claims/new', perm: 'claims.submit', self: true },
+    { label: 'My Claims', path: '/claims/mine', perm: 'claims.submit', self: true },
     { label: 'All Claims', path: '/claims/all', perm: ['claims.view', 'claims.view_team', 'claims.reimburse'] },
     { label: 'Claim Categories', path: '/claims/categories', perm: 'claims.manage' },
     { label: 'Expense Policies', path: '/claims/policies', perm: 'claims.manage' },
@@ -94,12 +95,12 @@ export const NAV: NavModule[] = [
     { label: 'Employee Goals', path: '/performance/goals' },
     { label: 'KPI Management', path: '/performance/kpis', perm: 'performance.manage' },
     { label: 'Performance Reviews', path: '/performance/reviews', perm: ['performance.view', 'performance.view_team'] },
-    { label: 'Self Assessment', path: '/performance/self' },
+    { label: 'Self Assessment', path: '/performance/self', self: true },
     { label: 'Manager Assessment', path: '/performance/manager', perm: ['performance.view_team', 'performance.manage'] },
     { label: 'HR Assessment', path: '/performance/hr', perm: 'performance.manage' },
     { label: 'Feedback', path: '/performance/feedback' },
     { label: 'Rating System', path: '/performance/ratings', perm: 'performance.manage' },
-    { label: 'Appraisal History', path: '/performance/history' },
+    { label: 'Appraisal History', path: '/performance/history', self: true },
     { label: 'Performance Reports', path: '/reports/performance', perm: 'reports.view' },
   ] },
   { key: 'engagement', label: 'Employee Engagement', icon: Megaphone, items: [
@@ -198,9 +199,9 @@ export const NAV: NavModule[] = [
   ] },
 ]
 
-export function visibleNav(can: (p: string | string[]) => boolean): NavModule[] {
+export function visibleNav(can: (p: string | string[]) => boolean, isEmployee = true): NavModule[] {
   return NAV.filter((m) => !m.perm || can(m.perm))
-    .map((m) => ({ ...m, items: m.items.filter((i) => !i.perm || can(i.perm)) }))
+    .map((m) => ({ ...m, items: m.items.filter((i) => (!i.perm || can(i.perm)) && (isEmployee || !i.self)) }))
     .filter((m) => m.items.length > 0)
 }
 

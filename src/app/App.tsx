@@ -167,7 +167,7 @@ export const ROUTES: { path: string; element: ReactNode }[] = [
   { path: '/attendance/daily', element: g(VIEW_ATT, <P.DailyAttendance />) },
   { path: '/attendance/monthly', element: g(VIEW_ATT, <P.MonthlyRegister />) },
   { path: '/attendance/calendar', element: <P.AttendanceCalendarPage /> },
-  { path: '/attendance/clock', element: g('attendance.clock', <P.ClockPage />) },
+  { path: '/attendance/clock', element: g('attendance.clock', mine(<P.ClockPage />)) },
   { path: '/attendance/face', element: g('attendance.face_enrol', <P.FaceAdmin />) },
   { path: '/attendance/shifts', element: g('attendance.manage', <P.ShiftsPage />) },
   { path: '/attendance/schedules', element: g('attendance.manage', <P.SchedulesPage />) },

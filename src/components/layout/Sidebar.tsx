@@ -20,9 +20,9 @@ export function Logo({ compact }: { compact?: boolean }) {
 }
 
 export function Sidebar({ collapsed, onToggle, onNavigate }: { collapsed: boolean; onToggle?: () => void; onNavigate?: () => void }) {
-  const { can } = useAuth()
+  const { can, access } = useAuth()
   const loc = useLocation()
-  const nav = visibleNav(can)
+  const nav = visibleNav(can, !!access?.employee_id)
   const activeModule = nav.find((m) => m.items.some((i) => i.path.split('?')[0] === loc.pathname))?.key
   const [open, setOpen] = useState<Record<string, boolean>>(() => (activeModule ? { [activeModule]: true } : { dashboard: true }))
   useEffect(() => { if (activeModule) setOpen((o) => ({ ...o, [activeModule]: true })) }, [activeModule])
